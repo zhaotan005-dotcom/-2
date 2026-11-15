@@ -251,7 +251,23 @@ public class Patcher {
     }
 
     /** newDex 不为空时，顺便把游戏里注入的 ZFrame dex 换成新的（游戏内置内核也更新） */
+    public static final String MCZI = "lib/armeabi-v7a/libMczi.so", ZLIB = "lib/armeabi-v7a/libzlib.so";
+    /** 原作者窗口状态：0=没有这个库，1=在，2=已关（换成了空壳） */
+    public static int mcziState(File apk) throws IOException {
+        try (ZipFile zf = new ZipFile(apk)) {
+            ZipEntry m = zf.getEntry(MCZI), z = zf.getEntry(ZLIB);
+            if (m == null) return 0;
+            if (z != null && m.getCrc() == z.getCrc() && m.getSize() == z.getSize()) return 2;
+            return 1;
+        }
+    }
+
     public static void patchSound(File in, File outUnsigned, boolean toAk, byte[] newDex, Log log) throws IOException {
+        patchSound(in, outUnsigned, toAk, newDex, 0, null, log);
+    }
+
+    /** mczi：0=不动，1=关掉原作者窗口（备份原库到 backup 再换成空壳），2=恢复（从 backup 放回） */
+    public static void patchSound(File in, File outUnsigned, boolean toAk, byte[] newDex, int mczi, File backup, Log log) throws IOException {
         byte[] want = toAk ? SND_NEW : SND_ORIG;
         byte[] buf = new byte[1 << 16];
         try (ZipFile zf = new ZipFile(in);
@@ -273,10 +289,29 @@ public class Patcher {
                         continue;
                     }
                 }
+                if (mczi != 0 && n.equals(MCZI)) {
+                    byte[] d;
+                    if (mczi == 1) {
+                        byte[] cur = readAll(zf.getInputStream(e));
+                        ZipEntry z = zf.getEntry(ZLIB);
+                        byte[] stub = readAll(zf.getInputStream(z));
+                        if (!java.util.Arrays.equals(cur, stub)) {
+                            try (OutputStream o = new FileOutputStream(backup)) { o.write(cur); }
+                            log.log("已备份原作者库 " + (cur.length >> 10) + " KB");
+                        }
+                        d = stub; log.log("关掉原作者窗口");
+                    } else {
+                        if (backup == null || !backup.isFile()) throw new IOException("没有找到原作者库的备份，不能恢复");
+                        try (InputStream bi = new FileInputStream(backup)) { d = readAll(bi); }
+                        log.log("恢复原作者窗口");
+                    }
+                    put(zo, n, d, e.getMethod() == ZipEntry.STORED ? ZipEntry.STORED : ZipEntry.DEFLATED);
+                    continue;
+                }
                 if (n.equals("assets/QCC_APM_PUBGM")) {
                     byte[] d = readAll(zf.getInputStream(e));
-                    String js = com.zframe.inject.Qcc.addModel(new String(d, "UTF-8"), android.os.Build.MODEL);
-                    if (js != null) { d = js.getBytes("UTF-8"); log.log("画质机型表加入 " + android.os.Build.MODEL); }
+                    String js = com.zframe.inject.Qcc.removeModel(new String(d, "UTF-8"), android.os.Build.MODEL);
+                    if (js != null) { d = js.getBytes("UTF-8"); log.log("机型表还原"); }
                     put(zo, n, d, e.getMethod() == ZipEntry.STORED ? ZipEntry.STORED : ZipEntry.DEFLATED);
                     continue;
                 }

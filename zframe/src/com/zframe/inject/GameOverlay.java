@@ -208,8 +208,14 @@ public class GameOverlay {
             head(a, u, root, "声音");
             LinearLayout ra = row(a, root);
             btn(a, u, ra, Con.audioAuto ? "开机先进大厅：开" : "开机先进大厅：关", () -> { Con.setAudioAuto(!Con.audioAuto); fill(a, u, root); });
-            head(a, u, root, "画质帧率");
-            label(a, root, Qcc.status + "（在游戏自带的设置里选）", 12, false, SUBT);
+            head(a, u, root, "机型档位（实验）");
+            LinearLayout rq = row(a, root);
+            final boolean qup = a.getSharedPreferences("zframe", 0).getBoolean("qcc_up", false);
+            btn(a, u, rq, qup ? "高档机型：开" : "高档机型：关", () -> {
+                a.getSharedPreferences("zframe", 0).edit().putBoolean("qcc_up", !qup).apply();
+                toast(a, "重启游戏后生效"); fill(a, u, root);
+            });
+            label(a, root, Qcc.status, 12, false, SUBT);
             head(a, u, root, "控制台");
             LinearLayout r4 = row(a, root);
             final EditText in = new EditText(a);

@@ -66,3 +66,11 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - In-game UI is now a resident panel like the libMczi window instead of a ball + dialog: a draggable title bar ("艾挽 · 全军出击单机版"; tap it to fold ▼/▶), a left tab column (地图/功能/设置), and content on the right. View tag zframe_panel.
   - Lobby logic: on boot, ~3 s after StartupMap loads, `open FrontEndMap_NEW` runs once (audio inits in the lobby). After that, map buttons go straight to the map. The old BR→lobby→BR bounce stays only as a fallback, used if something enters a BR map before lobby audio has been seen. Pref audio_auto3.
   - FPS/quality: device level comes from Tencent APM QCC config (plain asset assets/QCC_APM_PUBGM; cached copies apm_qcc* in app data). Adreno 810 isn't in the table → level 2. Qcc.fix() at boot adds Build.MODEL to level6 filter-model "6" in the cached copies; 修补游戏 also patches the asset. The menu's FPS buttons were removed, and applyFps is disabled (the game's own setting decides).
+- v1.23 test, 21:53: QCC took effect: MobileLevel went 2→5 and PipelineQuality 2→5. But the 超高 framerate option still says 「您的手机暂不支持」, and the lobby character renders as a gray mannequin (default material look). Settings log shows CalcRenderQuality InDeviceLevel:0. UE has MobileLevel2DeviceLevelMap / GetDeviceLevelByQcc / DeviceLevelForTest; the FPS gate is not found yet (probably UMG/blueprint).
+- QCC algorithm, from the dex: com.tencent.hawk.bridge.QccConfig.judgeDcls tries filter-model, then gpu, soc and manu, then "and opts" (res/ram/cpufreq/cores/gpu tables).
+- libMczi is loaded by System.loadLibrary("Mczi") in com.tencent.tpshell.TPShellApplication.preInitial. It has no JNI_OnLoad (init_array only) and imports EGL/GLES (the ImGui window).
+- v1.24 (vc 25, core 25):
+  - The QCC model bump is now off by default. Qcc.fix removes the model unless the pref qcc_up is set, and 修补游戏 also reverts the asset. The panel's 设置 tab has a 高档机型 toggle.
+  - 修补游戏 is now a list: 更新内核 / 更新内核 + 关掉原作者窗口 (replaces libMczi.so in the APK with a copy of libzlib.so and backs the original up to ZFrame filesDir/libMczi.orig.so) / 恢复原作者窗口 / 去掉声音补丁.
+  - User confirmed 21:53 that "他那个" (the libMczi window) should go.
+- Open requests: lobby character fix, and putting all wardrobe clothes into the 仓库 (server inventory, offline). Not done; needs RE.
