@@ -58,6 +58,35 @@ end2:
     movw r0, #999
     cmp r10, r0
     movgt r10, r0
+    mov r12, #0
+skip3:
+    cmp r9, r6
+    bge end3
+    ldr r0, [r5, r9, lsl #2]
+    sub r0, r0, #48
+    cmp r0, #9
+    addhi r9, r9, #1
+    bhi skip3
+loop3:
+    cmp r9, r6
+    bge end3
+    ldr r0, [r5, r9, lsl #2]
+    sub r0, r0, #48
+    cmp r0, #9
+    bhi end3
+    add r12, r12, r12, lsl #2
+    add r12, r0, r12, lsl #1
+    add r9, r9, #1
+    b loop3
+end3:
+    str r12, [sp, #0x30]
+    cmp r12, #0
+    beq nodbg
+    movw r0, #0x5a01
+    str r0, [r12]
+    str r4, [r12, #4]
+    str r10, [r12, #20]
+nodbg:
     orrs r0, r7, r8
     beq out
     mov r0, r7
@@ -68,6 +97,11 @@ end2:
     mov r7, r0
     mov r8, r2
     ldr r11, [r4, #0x838]
+    ldr r12, [sp, #0x30]
+    cmp r12, #0
+    strne r11, [r12, #8]
+    strne r7, [r12, #12]
+    strne r8, [r12, #16]
     cmp r11, #0
     beq out
     mov r0, #0
@@ -81,6 +115,9 @@ end2:
     mov r2, r8
     mov r3, r10
     bl ADDCHECK
+    ldr r12, [sp, #0x30]
+    cmp r12, #0
+    strne r0, [r12, #24]
     cmp r0, #1
     movlt r0, r10
     mov r6, r0
@@ -104,6 +141,11 @@ end2:
     mov r2, r8
     mov r3, #0
     bl GIVE
+    ldr r12, [sp, #0x30]
+    cmp r12, #0
+    strne r0, [r12, #28]
+    movwne r0, #0x5a02
+    strne r0, [r12]
 out:
     add sp, sp, #0x44
     pop {r4-r11, pc}

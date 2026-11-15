@@ -442,7 +442,7 @@ public class MainActivity extends Activity {
                             : ms == 2 ? new String[]{"更新内核", "更新内核 + 恢复原作者窗口", "去掉声音补丁"}
                             : new String[]{"更新内核", "去掉声音补丁"};
                     new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                        .setTitle(fg == 1 ? "修补游戏（这次会加上刷物品补丁）" : fg == 2 ? "修补游戏（刷物品补丁已在）" : "修补游戏（覆盖安装，不卸载）")
+                        .setTitle(fg == 1 ? "修补游戏（这次会加上刷物品补丁）" : fg == 2 ? "修补游戏（刷物品补丁已在）" : fg == 3 ? "修补游戏（这次会更新刷物品补丁）" : "修补游戏（覆盖安装，不卸载）")
                         .setItems(items, (d, w) -> {
                             String it = items[w];
                             if (it.startsWith("去掉")) runSound(pkg, ai, false, 0);
@@ -483,7 +483,7 @@ public class MainActivity extends Activity {
                 Patcher.sign(this, tmp, base);
                 tmp.delete();
                 if (Patcher.soundState(base) != (toAk ? 2 : 1)) throw new IOException("校验失败，没有安装，游戏没变");
-                try { int g = Patcher.giveState(base); plog("刷物品补丁：" + (g == 2 ? "已打" : g == 1 ? "没打（原版）" : "对不上")); } catch (Throwable ignored) {}
+                try { int g = Patcher.giveState(base); plog("刷物品补丁：" + (g == 2 ? "已打（v1.27 带诊断）" : g == 1 ? "没打（原版）" : g == 3 ? "旧版" : "对不上")); } catch (Throwable ignored) {}
                 List<File> result = new ArrayList<>();
                 result.add(base);
                 if (ai.splitSourceDirs != null) for (String sd : ai.splitSourceDirs) {

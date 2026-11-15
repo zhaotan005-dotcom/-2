@@ -48,7 +48,7 @@ public class Qcc {
     public static void fix(Context ctx) {
         try {
             String model = Build.MODEL;
-            up = ctx.getSharedPreferences("zframe", 0).getBoolean("qcc_up", false);
+            up = true; // v1.27：机型解锁固定开
             int n = 0, seen = 0;
             File data = ctx.getFilesDir().getParentFile();
             for (File root : new File[]{data, ctx.getExternalFilesDir(null)}) {

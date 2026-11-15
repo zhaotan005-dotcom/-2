@@ -190,10 +190,33 @@ public class GameOverlay {
     }
 
     /** v1.26：GiveItem 编号x数量（刷物品补丁里的代码会把 x 后面的数字当数量，最多 999） */
-    static void give(Activity a, String id, int n) { Con.exec("GiveItem " + id + (n > 1 ? "x" + n : "")); }
+    // v1.27 诊断：传一块自己的内存地址给补丁代码，它把走到哪一步写进来（只写这块缓冲区，不碰游戏内存）
+    static java.nio.ByteBuffer dbg; static long dbgAddr;
+    static long bufAddr(java.nio.ByteBuffer b) {
+        try { java.lang.reflect.Field f = java.nio.Buffer.class.getDeclaredField("address"); f.setAccessible(true); return f.getLong(b); }
+        catch (Throwable e) { return 0; }
+    }
+    static void give(Activity a, String id, int n) {
+        if (dbg == null) { dbg = java.nio.ByteBuffer.allocateDirect(64).order(java.nio.ByteOrder.LITTLE_ENDIAN); dbgAddr = bufAddr(dbg); }
+        for (int i = 0; i < 64; i += 4) dbg.putInt(i, 0);
+        String c = "GiveItem " + id + "x" + Math.max(1, n);
+        if (dbgAddr > 0 && dbgAddr < 0xFFFFFFFFL) c += "x" + dbgAddr;
+        Con.exec(c);
+    }
+    static String dbgText() {
+        if (dbg == null) return "没有诊断";
+        int m = dbg.getInt(0);
+        if (m == 0) return dbgAddr == 0 ? "诊断缓冲区拿不到地址" : "补丁代码没被调用（命令没走到人物身上）";
+        return String.format("进入=%s 人物=%08x 背包=%08x 类型=%d 子编号=%d 数量=%d 可放=%d 结果=%d",
+                m == 0x5a02 ? "走完" : "中途", dbg.getInt(4), dbg.getInt(8), dbg.getInt(12), dbg.getInt(16), dbg.getInt(20), dbg.getInt(24), dbg.getInt(28));
+    }
     static void give(Activity a, String id, int n, String label) {
         if (giveSt == 1) { toast(a, "刷物品补丁还没打：ZFrame → 修补游戏 → 更新内核"); return; }
-        give(a, id, n); toast(a, "已发：" + label + "（没出现就是这个编号不对）");
+        give(a, id, n);
+        final String lb = label;
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            String t = dbgText(); LogCap.note("刷物品诊断 " + lb + ": " + t); toast(a, lb + "：" + t);
+        }, 1200);
     }
 
     static volatile int giveSt = -1; // -1 还没查，0 查不到，1 没打，2 已打
@@ -239,7 +262,6 @@ public class GameOverlay {
             LinearLayout m2 = row(a, root);
             btn(a, u, m2, "雨林地图", () -> toast(a, Con.goMap(Con.MAP_SAVAGE)));
             btn(a, u, m2, "进入大厅", () -> toast(a, Con.goLobby()));
-            label(a, root, "声音：" + Con.audioFix, 12, false, SUBT).setPadding(0, u.dp(6), 0, 0);
         } else if (tab == 1) {
             head(a, u, root, "功能");
             LinearLayout r1 = row(a, root);
@@ -260,7 +282,9 @@ public class GameOverlay {
             btn(a, u, g0, "一键开局装备", () -> {
                 give(a, "20101000001", 1); give(a, "20600000001", 120); give(a, "20600000002", 120); give(a, "20600000003", 120);
                 give(a, "30304000003", 1); give(a, "30305000002", 1); give(a, "30307000006", 1); give(a, "30315000061", 1);
-                toast(a, "已发：M416、三种子弹、头盔、护甲、背包、风衣");
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    String t = dbgText(); LogCap.note("刷物品诊断 一键: " + t); toast(a, "一键装备（最后一件）：" + t);
+                }, 1200);
             });
             LinearLayout g1 = row(a, root);
             btn(a, u, g1, "M416", () -> give(a, "20101000001", 1, "M416"));
@@ -300,19 +324,8 @@ public class GameOverlay {
                 give(a, id, n, id + " ×" + n);
             });
         } else {
-            head(a, u, root, "声音");
-            LinearLayout ra = row(a, root);
-            btn(a, u, ra, Con.audioAuto ? "开机先进大厅：开" : "开机先进大厅：关", () -> { Con.setAudioAuto(!Con.audioAuto); fill(a, u, root); });
             head(a, u, root, "原作者窗口");
             label(a, root, mcziText(a), 12, false, SUBT);
-            head(a, u, root, "机型档位（实验）");
-            LinearLayout rq = row(a, root);
-            final boolean qup = a.getSharedPreferences("zframe", 0).getBoolean("qcc_up", false);
-            btn(a, u, rq, qup ? "高档机型：开" : "高档机型：关", () -> {
-                a.getSharedPreferences("zframe", 0).edit().putBoolean("qcc_up", !qup).apply();
-                toast(a, "重启游戏后生效"); fill(a, u, root);
-            });
-            label(a, root, Qcc.status, 12, false, SUBT);
             head(a, u, root, "控制台");
             LinearLayout r4 = row(a, root);
             final EditText in = new EditText(a);

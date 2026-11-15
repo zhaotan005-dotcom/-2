@@ -118,6 +118,12 @@ public class Con {
         "set NZGameMode bEnableAIDefaultWeap 1",
         "set NZGameMode bEnableGiveBotEquip 1",
         "set NZBattleRoyaleGameMode MaxBotLimit 30",
+        // v1.27：默认最高帧率档、最低画质档；关掉引擎的帧率平滑上限（游戏表里最高只给 60）
+        "set NZSystemSettingData FrameRateOption 4",
+        "set NZSystemSettingData RenderQualityOption 0",
+        "set GameEngine bSmoothFrameRate 0",
+        "getall NZSystemSettingData FrameRateOption",
+        "getall NZSystemSettingData RenderQualityOption",
         "getall NZBRGameState WaitingPlayersCountDownTime",
         "getall NZBRGameState StartMatchCountDownTime",
         "getall NZSceneDoorManager StandaloneUnloadAllDoor",
@@ -144,11 +150,14 @@ public class Con {
     }
 
     static void applyFps() {
-        // v1.23：帧率交给游戏自己的设置（机型已解锁到最高档），这里不再改
-        if (true) return;
-        final int f = fps; if (f <= 0) return;
-        exec("t.MaxFPS " + f);
+        // v1.27：默认最高帧率：屏幕切到最高刷新率，引擎上限跟着屏幕走
         final Activity a = act;
+        if (a == null) return;
+        int f = 60;
+        try { for (android.view.Display.Mode m : a.getWindowManager().getDefaultDisplay().getSupportedModes()) f = Math.max(f, Math.round(m.getRefreshRate())); } catch (Throwable ignored) {}
+        fps = f;
+        exec("t.MaxFPS " + f);
+        final int ff = f;
         if (a != null) a.runOnUiThread(() -> { try {
             android.view.Window w = a.getWindow();
             android.view.WindowManager.LayoutParams lp = w.getAttributes();
@@ -156,7 +165,7 @@ public class Con {
             android.view.Display.Mode best = null; android.view.Display.Mode cur = d.getMode();
             for (android.view.Display.Mode m : d.getSupportedModes()) {
                 if (m.getPhysicalWidth() != cur.getPhysicalWidth() || m.getPhysicalHeight() != cur.getPhysicalHeight()) continue;
-                if (m.getRefreshRate() + 0.5f < f) continue;
+                if (m.getRefreshRate() + 0.5f < ff) continue;
                 if (best == null || m.getRefreshRate() < best.getRefreshRate()) best = m;
             }
             if (best == null) for (android.view.Display.Mode m : d.getSupportedModes()) if (best == null || m.getRefreshRate() > best.getRefreshRate()) best = m;
@@ -193,7 +202,7 @@ public class Con {
 
     static void loadAudioPref() {
         Activity a = act; if (a == null) return;
-        audioAuto = a.getSharedPreferences("zframe", 0).getBoolean("audio_auto3", true);
+        audioAuto = true; // v1.27：固定开，不在菜单里显示
     }
 
     public static void setAudioAuto(boolean on) {

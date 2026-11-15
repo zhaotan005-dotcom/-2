@@ -111,3 +111,17 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - InitAvatarProxy also gives avatar items via cd3bdc directly (0x10d8c14), so the coat should work through the same path.
   - 功能 tab: 一键开局装备, gun/ammo/gear/coat buttons, and custom ID + count. Patch status is read from libUE4 at 0xe40ccc.
   - Build: zframe/rel.py (swap dex and bump manifest from the previous APK).
+- 22:48 v1.26 test:
+  - The patch was installed (刷物品补丁状态 2) and there was no crash, but nothing was given.
+  - The game log shows no StaticGiveToImpl or "Can't Find Item" lines. GridMap shows Players:1.
+  - The sd log is XOR 0x73 over the WHOLE file (decode fully; the per-line decode was wrong).
+  - GiveItem is on ANZCharacter with flags 0x20601 (Exec|Native|Public|Final).
+- v1.27 (vc 28, core 28):
+  - The cave now takes a 3rd number: the address of a Java direct ByteBuffer (Buffer.address via reflection). It writes diagnostics there:
+    - magic 0x5a01 on entry, 0x5a02 when done
+    - +4 this, +8 bp, +12 Type, +16 TSID, +20 cnt, +24 ccecbc ret, +28 cd3bdc ret
+  - New cave is 0x22c bytes. Patcher recognizes the v1.26 cave (giveState 3) and upgrades it.
+  - Panel toasts and logs "刷物品诊断".
+  - Removed the sound and QCC toggles from the panel; audioAuto and Qcc.up are forced on.
+  - Tweaks added: set NZSystemSettingData FrameRateOption 4, RenderQualityOption 0; set GameEngine bSmoothFrameRate 0; t.MaxFPS = the screen's max refresh rate, plus a window preferredDisplayMode at max refresh.
+  - ApplyFrameRateOption (0xca24ac) takes its FPS table from [this+0x88][DeviceLevel]; at level 5, option 4 = 60.
