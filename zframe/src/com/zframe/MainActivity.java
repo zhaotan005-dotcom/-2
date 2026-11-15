@@ -239,7 +239,7 @@ public class MainActivity extends Activity {
             LinearLayout br = u.row();
             g.addView(br);
             u.primary(br, "启动", v -> launchGame(pkg, true));
-            if (installed && !isTool) u.ghost(br, "声音补丁", v -> soundPatch(pkg));
+            if (installed && !isTool) u.ghost(br, "修补游戏", v -> soundPatch(pkg));
             if (root) u.ghost(br, "Root改", v -> { target = pkg; sp.edit().putString("target", pkg).apply(); launchGame(pkg, true); show(3); });
             u.danger(br, "移除", v -> { Set<String> s = games(); s.remove(pkg); saveGames(s); show(1); });
         }
@@ -429,11 +429,14 @@ public class MainActivity extends Activity {
             final int fs = st;
             h.post(() -> {
                 if (fs == 1) confirmSound(pkg, ai, true,
-                        "会把游戏包里 libUE4.so 的一个模块名（32 字节）改掉，让引擎加载 Wwise 声音模块。\n"
+                        "会把游戏包里 libUE4.so 的一个模块名（32 字节）改掉，让引擎加载 Wwise 声音模块，同时更新游戏内置的艾挽内核。\n"
                         + "覆盖安装，不卸载，存档和数据包都保留。需要几分钟，期间别切走。\n"
-                        + "如果打完进不去游戏，回到这里再点「声音补丁」就能还原。");
-                else if (fs == 2) confirmSound(pkg, ai, false,
-                        "声音补丁已经打上了。要还原成原来的 libUE4.so 吗？（同样是覆盖安装，不卸载）");
+                        + "如果打完进不去游戏，回到这里再点「修补游戏」就能还原声音补丁。");
+                else if (fs == 2) new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                        .setTitle("修补游戏").setMessage("声音补丁已经打上了。\n「更新内核」：把游戏内置内核换成最新的（以后不从 ZFrame 启动也是最新菜单）。\n「还原」：去掉声音补丁。\n都是覆盖安装，不卸载。")
+                        .setPositiveButton("更新内核", (d, w) -> runSound(pkg, ai, true))
+                        .setNeutralButton("还原", (d, w) -> runSound(pkg, ai, false))
+                        .setNegativeButton("取消", null).show();
                 else new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能打声音补丁")
                         .setMessage(fs == 0 ? "libUE4.so 对应位置的内容和预期不一样（游戏版本不同），为了不闪退，不改。" : "读取游戏安装包失败。")
                         .setPositiveButton("好", null).show();
@@ -449,7 +452,7 @@ public class MainActivity extends Activity {
     }
 
     void runSound(String pkg, ApplicationInfo ai, boolean toAk) {
-        showProgress(toAk ? "打声音补丁" : "还原声音补丁");
+        showProgress(toAk ? "修补游戏" : "还原声音补丁");
         bg(() -> {
             try {
                 File out = new File(getExternalFilesDir(null), "soundfix");
@@ -457,7 +460,7 @@ public class MainActivity extends Activity {
                 out.mkdirs();
                 File tmp = new File(out, "base_unsigned.apk");
                 plog("复制游戏包…");
-                Patcher.patchSound(new File(ai.sourceDir), tmp, toAk, this::plog);
+                Patcher.patchSound(new File(ai.sourceDir), tmp, toAk, Patcher.readAll(getAssets().open("inject.dex")), this::plog);
                 plog("签名中（大游戏需要几分钟）…");
                 File base = new File(out, "base.apk");
                 Patcher.sign(this, tmp, base);

@@ -238,7 +238,20 @@ public class Patcher {
     }
 
     /** 复制已注入的游戏 base.apk，只改 libUE4.so 那 32 字节（toAk=true 打补丁，false 还原），其它原样 */
-    public static void patchSound(File in, File outUnsigned, boolean toAk, Log log) throws IOException {
+    public static void patchSound(File in, File outUnsigned, boolean toAk, Log log) throws IOException { patchSound(in, outUnsigned, toAk, null, log); }
+
+    static boolean isOurDex(byte[] d) {
+        byte[] k = "Lcom/zframe/inject/ZInit;".getBytes();
+        outer:
+        for (int i = 0; i + k.length <= d.length; i++) {
+            for (int j = 0; j < k.length; j++) if (d[i + j] != k[j]) continue outer;
+            return true;
+        }
+        return false;
+    }
+
+    /** newDex 不为空时，顺便把游戏里注入的 ZFrame dex 换成新的（游戏内置内核也更新） */
+    public static void patchSound(File in, File outUnsigned, boolean toAk, byte[] newDex, Log log) throws IOException {
         byte[] want = toAk ? SND_NEW : SND_ORIG;
         byte[] buf = new byte[1 << 16];
         try (ZipFile zf = new ZipFile(in);
@@ -250,6 +263,16 @@ public class Patcher {
                 if (e.isDirectory()) continue;
                 if (n.startsWith("META-INF/") && (n.endsWith(".SF") || n.endsWith(".RSA") || n.endsWith(".DSA")
                         || n.endsWith(".EC") || n.equals("META-INF/MANIFEST.MF"))) continue;
+                if (newDex != null && n.matches("^classes\\d*\\.dex$")) {
+                    byte[] d = readAll(zf.getInputStream(e));
+                    if (isOurDex(d)) {
+                        log.log("更新游戏内置内核 " + n);
+                        ZipEntry de = new ZipEntry(n);
+                        de.setMethod(ZipEntry.DEFLATED);
+                        zo.putNextEntry(de); zo.write(newDex); zo.closeEntry();
+                        continue;
+                    }
+                }
                 ZipEntry ne = new ZipEntry(n);
                 boolean lib = n.equals(UE4_LIB);
                 if (e.getMethod() == ZipEntry.STORED) {

@@ -191,13 +191,41 @@ public class Con {
 
     static void loadAudioPref() {
         Activity a = act; if (a == null) return;
-        audioAuto = a.getSharedPreferences("zframe", 0).getBoolean("audio_auto2", false);
+        audioAuto = a.getSharedPreferences("zframe", 0).getBoolean("audio_auto3", true);
     }
 
     public static void setAudioAuto(boolean on) {
         audioAuto = on;
         Activity a = act;
-        if (a != null) a.getSharedPreferences("zframe", 0).edit().putBoolean("audio_auto2", on).apply();
+        if (a != null) a.getSharedPreferences("zframe", 0).edit().putBoolean("audio_auto3", on).apply();
+    }
+
+    // ===== v1.22 艾挽菜单：进地图（本次启动第一次进图先经过大厅，让声音正常） =====
+    public static final String MAP_ERANGEL = "/Game/Maps/ErangelMobile_Runtime/BR-Erangel_Mobile_Main";
+    public static final String MAP_ERANGEL2 = "/Game/Maps/ErangeMobileRenew_Runtime/BR-ErangelRenew_Mobile_Main";
+    public static final String MAP_SAVAGE = "/Game/Maps/SavageMobile_4x4_Runtime/BR-Savage_Mobile_Main";
+    static volatile String pendingMap;
+
+    /** 返回给用户看的提示 */
+    public static String goMap(String m) {
+        if (audioAuto && !feAudioSeen) {
+            pendingMap = m; bounce = 1; brLoadedAt = 0;
+            audioFix = "先进大厅加载声音，然后自动进图…";
+            LogCap.note("进图: 先进大厅 " + LOBBY + "，然后进 " + m);
+            exec("open " + LOBBY);
+            return "先进大厅加载声音，几秒后自动进图";
+        }
+        pendingMap = null;
+        LogCap.note("进图: " + m);
+        exec("open " + m);
+        return "正在进图";
+    }
+
+    public static String goLobby() {
+        pendingMap = null; if (bounce == 1) bounce = 0;
+        LogCap.note("进大厅: " + LOBBY);
+        exec("open " + LOBBY);
+        return "正在进大厅";
     }
 
     /** 手动：现在就经大厅重进当前地图 */
@@ -218,7 +246,8 @@ public class Con {
         }
         if (bounce == 1 && feAudioSeen && feSeenAt > 0 && now - feSeenAt > 4000) {
             bounce = 2;
-            String m = brMap != null ? brMap : "/Game/Maps/SavageMobile_4x4_Runtime/BR-Savage_Mobile_Main";
+            String m = pendingMap != null ? pendingMap : brMap != null ? brMap : MAP_SAVAGE;
+            pendingMap = null;
             audioFix = "大厅音频已初始化，正在回到地图";
             LogCap.note("声音修复: 大厅音频已初始化，回到 " + m);
             exec("open " + m);

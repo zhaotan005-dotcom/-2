@@ -24,7 +24,7 @@ public class GameOverlay {
             final Ui u = new Ui(a);
             final TextView ball = new TextView(a);
             ball.setTag("zframe_ball");
-            ball.setText("Z");
+            ball.setText("艾");
             ball.setTextColor(0xFF0A0E24);
             ball.setTypeface(Typeface.DEFAULT_BOLD);
             ball.setTextSize(20);
@@ -85,6 +85,62 @@ public class GameOverlay {
         if (label != null) Toast.makeText(a, ok ? label : "执行失败", Toast.LENGTH_SHORT).show();
     }
 
+    static void fill(final Activity a, final Ui u, final Dialog d, final LinearLayout root) {
+        root.removeAllViews();
+        if (tab == 0) {
+            u.text(root, "地图选择", 15, Ui.TEXT, true).setPadding(0, u.dp(8), 0, u.dp(4));
+            u.sub(root, "本次启动第一次进图会先经过大厅加载声音，几秒后自动进图。");
+            LinearLayout m1 = u.row(); root.addView(m1);
+            btn(u, m1, "海岛地图", () -> toast(a, Con.goMap(Con.MAP_ERANGEL), d));
+            btn(u, m1, "海岛地图2", () -> toast(a, Con.goMap(Con.MAP_ERANGEL2), d));
+            LinearLayout m2 = u.row(); root.addView(m2);
+            btn(u, m2, "雨林地图", () -> toast(a, Con.goMap(Con.MAP_SAVAGE), d));
+            btn(u, m2, "进入大厅", () -> toast(a, Con.goLobby(), d));
+            u.sub(root, "声音：" + Patches.audioStatus + " · " + Con.audioFix);
+        } else if (tab == 1) {
+            u.text(root, "功能", 15, Ui.TEXT, true).setPadding(0, u.dp(8), 0, u.dp(4));
+            u.sub(root, Patches.Status.text());
+            u.sub(root, "开局等待：" + Patches.waitStatus);
+            LinearLayout r1 = u.row(); root.addView(r1);
+            btn(u, r1, "无敌开/关", () -> { cmd(a, "EnableCheats"); cmd(a, "God", "已切换无敌"); });
+            btn(u, r1, "缩短本局等待", () -> { Patches.lastWaitScan = 0; Patches.shortenWait("手动"); Toast.makeText(a, "正在缩短等待时间", Toast.LENGTH_SHORT).show(); });
+            final TextView ls = u.sub(root, "门/物资/车刷新层：" + Con.layerStatus());
+            u.ghost(root, "重新加载门/物资/车刷新层", v -> { Con.loadServerLevels("手动"); ls.setText("门/物资/车刷新层：" + Con.layerStatus()); });
+            u.ghost(root, "跳伞后用：传送到安全区中心上空", v -> {
+                String c = Con.circle;
+                if (c == null) { Toast.makeText(a, "还没拿到安全区位置，等飞机起飞后再点", Toast.LENGTH_LONG).show(); return; }
+                cmd(a, "EnableCheats"); cmd(a, "BugItGo " + c + " 15000 0 0 0", "已传送到安全区中心上空");
+            });
+        } else {
+            u.text(root, "帧率（当前 " + (Con.fps > 0 ? Con.fps + " 帧" : "游戏默认") + "）", 15, Ui.TEXT, true).setPadding(0, u.dp(8), 0, u.dp(4));
+            LinearLayout rf = u.row(); root.addView(rf);
+            for (final int f : new int[]{60, 90, 120}) btn(u, rf, f + "帧", () -> { Con.setFps(f); Toast.makeText(a, "已设为 " + f + " 帧，以后自动生效", Toast.LENGTH_SHORT).show(); });
+            btn(u, rf, "默认", () -> { Con.setFps(0); Con.exec("t.MaxFPS 40"); Toast.makeText(a, "已恢复游戏默认", Toast.LENGTH_SHORT).show(); });
+            u.text(root, "声音", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
+            LinearLayout ra = u.row(); root.addView(ra);
+            btn(u, ra, Con.audioAuto ? "先进大厅再进图：开" : "先进大厅再进图：关", () -> { Con.setAudioAuto(!Con.audioAuto); Toast.makeText(a, Con.audioAuto ? "已开启" : "已关闭", Toast.LENGTH_SHORT).show(); fill(a, u, d, root); });
+            u.text(root, "控制台", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
+            LinearLayout r4 = u.row(); root.addView(r4);
+            final EditText in = u.input(r4, "输入引擎命令", false);
+            in.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
+            TextView go = u.primary(r4, "执行", v -> { String c = in.getText().toString().trim(); if (!c.isEmpty()) cmd(a, c, "已执行"); });
+            go.setLayoutParams(new LinearLayout.LayoutParams(u.dp(80), -2));
+            u.text(root, "日志", 15, Ui.TEXT, true).setPadding(0, u.dp(12), 0, u.dp(4));
+            final TextView st = u.sub(root, LogCap.status());
+            u.primary(root, "立即保存日志", v -> new Thread(() -> {
+                LogCap.syncNow(a);
+                a.runOnUiThread(() -> { st.setText(LogCap.status()); Toast.makeText(a, "已保存到 下载/ZFrame", Toast.LENGTH_SHORT).show(); });
+            }).start());
+        }
+    }
+
+    static void toast(Activity a, String msg, Dialog d) {
+        Toast.makeText(a, msg, Toast.LENGTH_SHORT).show();
+        if (d != null) d.dismiss();
+    }
+
+    static int tab = 0;
+
     static void openPanel(final Activity a) {
         if (dialog != null && dialog.isShowing()) return;
         final Ui u = new Ui(a);
@@ -95,50 +151,25 @@ public class GameOverlay {
         root.setPadding(u.dp(16), u.dp(14), u.dp(16), u.dp(12));
         LinearLayout head = u.row();
         root.addView(head);
-        u.text(head, "ZFrame 游戏菜单", 18, Ui.TEXT, true).setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
+        u.text(head, "艾挽", 18, Ui.TEXT, true).setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
         TextView close = u.ghost(head, "收起", v -> d.dismiss());
         close.setLayoutParams(new LinearLayout.LayoutParams(u.dp(72), -2));
-        u.sub(root, "内核 " + ZInit.CORE_VER + " · " + a.getPackageName());
+        u.sub(root, "单机版 · 内核 " + ZInit.CORE_VER);
 
-        u.text(root, "修复", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
-        u.sub(root, Patches.Status.text());
-        u.sub(root, "开局等待：" + Patches.waitStatus);
-        u.sub(root, "声音引擎：" + Patches.audioStatus);
-        u.sub(root, "声音修复：" + Con.audioFix);
-        u.sub(root, "声音诊断日志：" + AkDiag.status);
-        LinearLayout ra = u.row(); root.addView(ra);
-        btn(u, ra, "经大厅重进本局(修声音)", () -> Toast.makeText(a, Con.audioBounceNow() ? "马上进大厅初始化声音，然后自动回到地图" : Con.audioFix, Toast.LENGTH_LONG).show());
-        btn(u, ra, Con.audioAuto ? "自动修声音：开" : "自动修声音：关", () -> { Con.setAudioAuto(!Con.audioAuto); Toast.makeText(a, Con.audioAuto ? "已开启：每次启动第一次进图会先经过大厅" : "已关闭自动修声音", Toast.LENGTH_SHORT).show(); d.dismiss(); });
-        final TextView ls = u.sub(root, "门/物资/车刷新层：" + Con.layerStatus());
-        u.ghost(root, "重新加载门/物资/车刷新层", v -> { Con.loadServerLevels("手动"); ls.setText("门/物资/车刷新层：" + Con.layerStatus()); });
-
-        u.text(root, "功能", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
-        LinearLayout r1 = u.row(); root.addView(r1);
-        btn(u, r1, "无敌开/关", () -> { cmd(a, "EnableCheats"); cmd(a, "God", "已切换无敌"); });
-        btn(u, r1, "缩短本局等待", () -> { Patches.lastWaitScan = 0; Patches.shortenWait("手动"); Toast.makeText(a, "正在缩短等待时间", Toast.LENGTH_SHORT).show(); });
-        u.text(root, "帧率（当前 " + (Con.fps > 0 ? Con.fps + " 帧" : "游戏默认") + "）", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
-        LinearLayout rf = u.row(); root.addView(rf);
-        for (final int f : new int[]{60, 90, 120}) btn(u, rf, f + "帧", () -> { Con.setFps(f); Toast.makeText(a, "已设为 " + f + " 帧，以后自动生效", Toast.LENGTH_SHORT).show(); });
-        btn(u, rf, "默认", () -> { Con.setFps(0); Con.exec("t.MaxFPS 40"); Toast.makeText(a, "已恢复游戏默认", Toast.LENGTH_SHORT).show(); });
-        u.ghost(root, "跳伞后用：传送到安全区中心上空", v -> {
-            String c = Con.circle;
-            if (c == null) { Toast.makeText(a, "还没拿到安全区位置，等飞机起飞后再点", Toast.LENGTH_LONG).show(); return; }
-            cmd(a, "EnableCheats"); cmd(a, "BugItGo " + c + " 15000 0 0 0", "已传送到安全区中心上空");
-        });
-
-        u.text(root, "控制台", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
-        LinearLayout r4 = u.row(); root.addView(r4);
-        final EditText in = u.input(r4, "输入引擎命令", false);
-        in.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
-        TextView go = u.primary(r4, "执行", v -> { String c = in.getText().toString().trim(); if (!c.isEmpty()) cmd(a, c, "已执行"); });
-        go.setLayoutParams(new LinearLayout.LayoutParams(u.dp(80), -2));
-
-        u.text(root, "日志", 15, Ui.TEXT, true).setPadding(0, u.dp(12), 0, u.dp(4));
-        final TextView st = u.sub(root, LogCap.status());
-        u.primary(root, "立即保存日志", v -> new Thread(() -> {
-            LogCap.syncNow(a);
-            a.runOnUiThread(() -> { st.setText(LogCap.status()); Toast.makeText(a, "已保存到 下载/ZFrame", Toast.LENGTH_SHORT).show(); });
-        }).start());
+        final LinearLayout body = u.col();
+        final String[] tabs = {"地图", "功能", "设置"};
+        LinearLayout tr = u.row(); root.addView(tr);
+        final TextView[] tv = new TextView[tabs.length];
+        for (int k = 0; k < tabs.length; k++) {
+            final int idx = k;
+            tv[k] = u.ghost(tr, tabs[k], v -> { tab = idx; for (int j = 0; j < tv.length; j++) u.style(tv[j], j == idx); fill(a, u, d, body); });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+            lp.setMargins(0, u.dp(8), u.dp(6), u.dp(4));
+            tv[k].setLayoutParams(lp);
+            u.style(tv[k], k == tab);
+        }
+        root.addView(body);
+        fill(a, u, d, body);
 
         ScrollView sv = new ScrollView(a);
         sv.addView(root);

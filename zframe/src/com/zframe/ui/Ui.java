@@ -170,7 +170,7 @@ public class Ui {
         return cur;
     }
 
-    void style(TextView t, boolean on) {
+    public void style(TextView t, boolean on) {
         t.setBackground(on ? grad(10) : null);
         t.setTextColor(on ? 0xFF0A0E24 : SUB);
     }

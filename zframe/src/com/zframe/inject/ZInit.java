@@ -21,7 +21,11 @@ public class ZInit extends ContentProvider {
     @Override
     public boolean onCreate() {
         Context ctx = getContext();
-        // 优先加载框架 App 里最新的内核（更新 ZFrame 后游戏不用重装）；失败就用游戏里自带的这份
+        // 1) 优先从 ZFrame App 拿最新内核；成功就顺手存一份到游戏私有目录
+        // 2) 拿不到（比如系统拦了关联启动）就用上次存下的那份，只要它比游戏里自带的新
+        // 3) 都不行才用游戏里自带的
+        File last = new File(ctx.getFilesDir(), "zcore_last.dex");
+        File lastVer = new File(ctx.getFilesDir(), "zcore_last.ver");
         try {
             File f = new File(ctx.getCodeCacheDir(), "zcore.dex");
             f.delete();
@@ -33,17 +37,40 @@ public class ZInit extends ContentProvider {
             }
             f.setReadOnly();
             ClassLoader cl = new dalvik.system.DexClassLoader(f.getAbsolutePath(), ctx.getCodeCacheDir().getAbsolutePath(), null, Context.class.getClassLoader());
-            cl.loadClass(ZInit.class.getName()).getMethod("boot", Context.class).invoke(null, ctx);
-            Log.i(TAG, "已加载框架最新内核");
+            Class<?> z = cl.loadClass(ZInit.class.getName());
+            int v = 0; try { v = z.getField("CORE_VER").getInt(null); } catch (Throwable ignored) {}
+            try {
+                last.setWritable(true); last.delete();
+                try (InputStream in = new FileInputStream(f); OutputStream o = new FileOutputStream(last)) {
+                    byte[] b = new byte[1 << 16]; int r;
+                    while ((r = in.read(b)) > 0) o.write(b, 0, r);
+                }
+                last.setReadOnly();
+                try (FileOutputStream o = new FileOutputStream(lastVer)) { o.write(String.valueOf(v).getBytes()); }
+            } catch (Throwable ignored) {}
+            z.getMethod("boot", Context.class).invoke(null, ctx);
+            Log.i(TAG, "已加载框架最新内核 " + v);
             return true;
         } catch (Throwable t) {
-            Log.w(TAG, "最新内核加载失败，用内置", t);
+            Log.w(TAG, "最新内核加载失败", t);
+        }
+        try {
+            int v = 0;
+            try (InputStream in = new FileInputStream(lastVer)) { byte[] b = new byte[16]; int n = in.read(b); v = Integer.parseInt(new String(b, 0, Math.max(n, 0)).trim()); }
+            if (last.exists() && v > CORE_VER) {
+                ClassLoader cl = new dalvik.system.DexClassLoader(last.getAbsolutePath(), ctx.getCodeCacheDir().getAbsolutePath(), null, Context.class.getClassLoader());
+                cl.loadClass(ZInit.class.getName()).getMethod("boot", Context.class).invoke(null, ctx);
+                Log.i(TAG, "用上次保存的内核 " + v);
+                return true;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "上次保存的内核加载失败，用内置", t);
         }
         boot(ctx);
         return true;
     }
 
-    public static final int CORE_VER = 22;
+    public static final int CORE_VER = 23;
 
     public static void boot(Context ctx) {
         try {
