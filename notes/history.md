@@ -82,3 +82,9 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - 功能 tab adds 查物品编号（只读）. It scans the heap through /proc/self/mem (read-only) for UTF-32 names containing 风衣 or 连帽, finds pointers to those names, and collects nearby int64 values in 1e10–1e11. ItemFind.java.
   - 设置 tab shows the 原作者窗口 status by comparing the libMczi.so and libzlib.so sizes in nativeLibraryDir.
   - Next: once the user sends the coat ID, patch the InitAvatarProxy default list in libUE4.
+- 22:20 v1.25 test:
+  - libMczi.so in the lib dir is now 67088 bytes (the stub), so the 原作者窗口 is closed.
+  - ItemFind found the 风衣 names, including 黑色风衣 and 绝地风衣 (the hooded one; 脱帽版 is separate). But the "IDs" next to them are FString {ptr,Num} pairs (hi = length), not item IDs, so the tool is useless as written.
+  - The user asked to remove it.
+- Coat plan: only two Coat models are mounted (30315000050 F_Jacket, 30315000061), so try 30315000061 as the 绝地风衣.
+- User's next ask: find the gun-spawn code and ammo. GiveItem and its siblings are stubs (0xb63a30, bx lr), so look at the pickup spawn path instead (SpawnPickup / ItemGenerator / PickupManager).
