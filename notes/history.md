@@ -88,3 +88,10 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - The user asked to remove it.
 - Coat plan: only two Coat models are mounted (30315000050 F_Jacket, 30315000061), so try 30315000061 as the 绝地风衣.
 - User's next ask: find the gun-spawn code and ammo. GiveItem and its siblings are stubs (0xb63a30, bx lr), so look at the pickup spawn path instead (SpawnPickup / ItemGenerator / PickupManager).
+- 22:25 RE for gun/ammo spawn:
+  - The GM panel (class with CloseGMPanel/GiveEquip/OnBtnGiveM416…, funcs ~0x1716xxx–0x171exxx) is dead. GiveEquip only issues the console command "GiveItem <id>" (IDs 30307000006, 40100000001/2, 20101000002, 20503000004, 20105000002, 30304000003, 30305000002, 20504000001, 20501000001, 20502000001/2, 20501000003). OnBtnGiveM416 builds FString "2101001..." and calls the 0xb63a30 stub.
+  - The exec GiveItem thunk 0xe40c58 parses one FString and calls 0xb63a30 (stub) at 0xe40ccc: `mov r0,r4(this); mov r1,sp(&FString); bl`. The stub call can be redirected into a code cave (e.g. the dead GM function bodies).
+  - Real give path, used by bots: ForceGiveAllEquipToAI 0xc1a534 iterates [ctrl+0x410] entries (0x18 bytes; id64 at +8, count at +0x10) and calls 0xc11f04(entry.., ctrl, pawn).
+    - Inside it, Type = id/10000 (0xce0248) and TSID = id%10000 (0xce0260).
+    - Then 0xc12370(ctrl, pawn, &{Type,TSID}, count) does: backpack = [pawn+0x838] (0xcc8274); n = 0xccecbc(bp, Type, TSID, count, 0, -1, -1, 0); then 0xcd3bdc(pawn, Type, TSID, 0, [sp]=n, -1, uidlo, uidhi, n, &zero, 0…). uid comes from 0xc1194c(ctrl) = [[ctrl+0x420]+0x3b0] (0 if null).
+  - Plan: a cave that parses "GiveItem <id> [count]" and calls ccecbc + cd3bdc with uid 0. Open problem: the ID format for guns/ammo (split /10000) is still unconfirmed.
