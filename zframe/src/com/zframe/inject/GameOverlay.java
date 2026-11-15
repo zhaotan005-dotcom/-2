@@ -211,12 +211,19 @@ public class GameOverlay {
         return String.format("进入=%s 人物=%08x 背包=%08x 类型=%d 子编号=%d 数量=%d 可放=%d 结果=%d",
                 m == 0x5a02 ? "走完" : "中途", dbg.getInt(4), dbg.getInt(8), dbg.getInt(12), dbg.getInt(16), dbg.getInt(20), dbg.getInt(24), dbg.getInt(28));
     }
+    // 配件：枪口/握把/瞄具/弹匣/枪托（编号来自游戏里的自动拾取表和 GM 列表）
+    static final String[] ATT = {"20501000001", "20501000003", "20502000001", "20502000002", "20503000001", "20503000003",
+            "20503000004", "20503000005", "20503000008", "20503000009", "20504000001", "20505000001"};
     static void give(Activity a, String id, int n, String label) {
-        if (giveSt == 1) { toast(a, "刷物品补丁还没打：ZFrame → 修补游戏 → 更新内核"); return; }
+        if (giveSt == 1 || giveSt == 3) { toast(a, "先在艾挽补丁更新里点「更新」"); return; }
         give(a, id, n);
-        final String lb = label;
+        after(a, label);
+    }
+    static void after(Activity a, final String lb) {
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-            String t = dbgText(); LogCap.note("刷物品诊断 " + lb + ": " + t); toast(a, lb + "：" + t);
+            String t = dbgText(); LogCap.note("刷物品诊断 " + lb + ": " + t);
+            boolean ok = dbg != null && dbg.getInt(0) == 0x5a02 && dbg.getInt(28) != 0;
+            toast(a, ok ? "已刷 " + lb : lb + " 没刷出来");
         }, 1200);
     }
 
@@ -226,7 +233,7 @@ public class GameOverlay {
             giveSt = -2;
             new Thread(() -> { giveSt = readGive(a); LogCap.note("刷物品补丁状态 " + giveSt); }).start();
         }
-        return giveSt == 2 ? "补丁已打" : giveSt == 1 ? "补丁没打：ZFrame → 修补游戏 → 更新内核" : giveSt == 3 ? "补丁是旧版：ZFrame → 修补游戏 → 更新内核" : giveSt == 0 ? "补丁状态查不到（照样可以试）" : "检查补丁中…";
+        return giveSt == 2 ? "补丁已打" : giveSt == 1 || giveSt == 3 ? "先在艾挽补丁更新里点「更新」" : giveSt == 0 ? "" : "检查补丁中…";
     }
     static int readGive(Activity a) {
         int w = readWord(a, 0xe40cccL);
@@ -271,38 +278,43 @@ public class GameOverlay {
             btn(a, u, r1, "无敌开/关", () -> { cmd(a, "EnableCheats"); cmd(a, "God", "已切换无敌"); });
             btn(a, u, r1, "缩短等待", () -> { Patches.lastWaitScan = 0; Patches.shortenWait("手动"); toast(a, "正在缩短等待时间"); });
             LinearLayout r2 = row(a, root);
-            btn(a, u, r2, "重载门/物资/车", () -> { Con.loadServerLevels("手动"); toast(a, Con.layerStatus()); });
+            btn(a, u, r2, "重载门/物资/车", () -> { Con.loadServerLevels("手动"); toast(a, Con.layerShort()); });
             btn(a, u, r2, "传送到安全区", () -> {
                 String c = Con.circle;
                 if (c == null) { toast(a, "还没拿到安全区位置，等飞机起飞后再点"); return; }
                 cmd(a, "EnableCheats"); cmd(a, "BugItGo " + c + " 15000 0 0 0", "已传送到安全区中心上空");
             });
             head(a, u, root, "刷物品");
-            if (giveSt != 2) label(a, root, giveText(a), 12, false, SUBT);
+            String gt = giveText(a); if (giveSt != 2 && !gt.isEmpty()) label(a, root, gt, 12, false, SUBT);
             LinearLayout g0 = row(a, root);
             btn(a, u, g0, "一键开局装备", () -> {
-                give(a, "20101000001", 1); give(a, "20600000001", 120); give(a, "20600000002", 120); give(a, "20600000003", 120);
-                give(a, "30304000003", 1); give(a, "30305000002", 1); give(a, "30307000006", 1); give(a, "30315000061", 1);
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    String t = dbgText(); LogCap.note("刷物品诊断 一键: " + t); toast(a, "一键装备（最后一件）：" + t);
-                }, 1200);
+                give(a, "20101000001", 1); give(a, "20600000001", 150);
+                give(a, "30304000003", 1); give(a, "30305000002", 1); give(a, "30307000006", 1);
+                for (String at : ATT) give(a, at, 1);
+                after(a, "一键装备");
             });
             LinearLayout g1 = row(a, root);
             btn(a, u, g1, "M416", () -> give(a, "20101000001", 1, "M416"));
             btn(a, u, g1, "AK47", () -> give(a, "20101000002", 1, "AK47"));
-            btn(a, u, g1, "UMP9", () -> give(a, "20105000001", 1, "UMP9"));
+            btn(a, u, g1, "SCAR-L", () -> give(a, "20101000004", 1, "SCAR-L"));
+            LinearLayout g1b = row(a, root);
+            btn(a, u, g1b, "M16A4", () -> give(a, "20101000003", 1, "M16A4"));
+            btn(a, u, g1b, "UMP9", () -> give(a, "20105000001", 1, "UMP9"));
+            btn(a, u, g1b, "98K", () -> give(a, "20104000001", 1, "98K"));
             LinearLayout g2 = row(a, root);
-            btn(a, u, g2, "子弹1", () -> give(a, "20600000001", 120, "子弹1 ×120"));
-            btn(a, u, g2, "子弹2", () -> give(a, "20600000002", 120, "子弹2 ×120"));
-            btn(a, u, g2, "子弹3", () -> give(a, "20600000003", 120, "子弹3 ×120"));
+            btn(a, u, g2, "5.56子弹", () -> give(a, "20600000001", 150, "5.56子弹"));
+            btn(a, u, g2, "7.62子弹", () -> give(a, "20600000002", 150, "7.62子弹"));
+            btn(a, u, g2, "子弹3", () -> give(a, "20600000003", 150, "子弹3"));
             LinearLayout g3 = row(a, root);
-            btn(a, u, g3, "手雷", () -> give(a, "20401000001", 3, "手雷 ×3"));
-            btn(a, u, g3, "头盔", () -> give(a, "30304000003", 1, "头盔"));
-            btn(a, u, g3, "护甲", () -> give(a, "30305000002", 1, "护甲"));
-            btn(a, u, g3, "背包", () -> give(a, "30307000006", 1, "背包"));
+            btn(a, u, g3, "全套配件", () -> { for (String at : ATT) give(a, at, 1); after(a, "全套配件"); });
+            btn(a, u, g3, "手雷", () -> give(a, "20401000001", 3, "手雷"));
             LinearLayout g4 = row(a, root);
-            btn(a, u, g4, "风衣A 061", () -> give(a, "30315000061", 1, "风衣 30315000061"));
-            btn(a, u, g4, "风衣B 050", () -> give(a, "30315000050", 1, "风衣 30315000050"));
+            btn(a, u, g4, "头盔", () -> give(a, "30304000003", 1, "头盔"));
+            btn(a, u, g4, "护甲", () -> give(a, "30305000002", 1, "护甲"));
+            btn(a, u, g4, "背包", () -> give(a, "30307000006", 1, "背包"));
+            head(a, u, root, "刷车");
+            LinearLayout v1 = row(a, root);
+            btn(a, u, v1, "刷一辆车", () -> Con.spawnCar(a));
         } else {
             head(a, u, root, "日志");
             final TextView st = label(a, root, LogCap.status(), 12, false, SUBT);

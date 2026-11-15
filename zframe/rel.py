@@ -10,6 +10,10 @@ for enc in ('utf-16le', 'utf-8'):
     i = m.find(a)
     if i >= 0: m[i:i+len(a)] = b; print('name', enc, i); break
 else: raise SystemExit('versionName not found')
+# LABEL: app name ZFrame -> 艾挽补丁更新 (same utf-16 length 6)
+a='ZFrame'.encode('utf-16le'); b='艾挽补丁更新'.encode('utf-16le'); assert len(a)==len(b)
+i=m.find(b'\x06\x00'+a)
+if i>=0: m[i+2:i+2+len(a)]=b; print('label', i)
 # versionCode attr: res id 0x0101021b; attribute = ns,name,rawValue,(size,0,type,data)
 # find attr entries whose typed data is int-dec 0x10 with value oldc
 pat = struct.pack('<HBBI', 8, 0, 0x10, oldc)

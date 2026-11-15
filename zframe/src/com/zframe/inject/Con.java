@@ -53,6 +53,29 @@ public class Con {
     static volatile boolean autoOn = true;
 
     public static String layerStatus() { return layerStatus; }
+    static String layerShort() {
+        synchronized (serverLevels) { if (serverLevels.isEmpty()) return "这张图的门/物资/车是游戏自己加载的，不用重载"; }
+        return "已重载门/物资/车";
+    }
+
+    // ===== v1.29 刷车：getall 列出场上的车型（输出进游戏日志），再用 Summon 在面前刷一辆 =====
+    static final java.util.LinkedHashSet<String> carClasses = new java.util.LinkedHashSet<>();
+    static volatile int carIdx = 0;
+    static final java.util.regex.Pattern CAR = java.util.regex.Pattern.compile("\\d+\\) (\\w+_C) \\S+\\.bHidden = ");
+    static void spawnCar(final Activity a) {
+        exec("getall WheeledVehicle bHidden");
+        exec("getall NZVehicleMotoCycle bHidden");
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            List<String> cs;
+            synchronized (carClasses) { cs = new ArrayList<>(carClasses); }
+            if (cs.isEmpty()) { GameOverlay.toast(a, "还没找到车型，过两秒再点一次"); return; }
+            String c = cs.get(carIdx++ % cs.size());
+            exec("EnableCheats");
+            exec("Summon " + c);
+            LogCap.note("刷车: " + c + "（共 " + cs.size() + " 种）");
+            GameOverlay.toast(a, "已刷车 " + (((carIdx - 1) % cs.size()) + 1) + "/" + cs.size());
+        }, 2500);
+    }
 
     static void loadServerLevels(String why) {
         List<String> lv;
@@ -284,6 +307,12 @@ public class Con {
     static final long bootAt = System.currentTimeMillis();
 
     static void line(String l) {
+        if (l.contains(".bHidden = ")) {
+            java.util.regex.Matcher m = CAR.matcher(l);
+            if (m.find()) synchronized (carClasses) { if (carClasses.add(m.group(1))) LogCap.note("车型: " + m.group(1)); }
+        }
+        int av = l.indexOf("OnAvatarAssembler In Items");
+        if (av >= 0) LogCap.note("身上装备编号: " + l.substring(av).trim());
         if (engineSeenAt == 0 && l.contains("LogLoad: Took")) { engineSeenAt = System.currentTimeMillis(); LogCap.note("引擎就绪，10秒后发送设置"); AkDiag.engineUp(act); loadAudioPref(); }
         if (l.contains("UNZFrontEndAudioManager: init") || l.contains("UNZPlatformAudioHelper::OnInitialize")) {
             if (!feAudioSeen) { feAudioSeen = true; feSeenAt = System.currentTimeMillis(); LogCap.note("声音修复: 看到大厅音频初始化"); }

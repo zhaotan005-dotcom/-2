@@ -135,3 +135,16 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - Java sends "AddAvaItem P<id>x<n>x<dbgaddr>".
   - Patcher recognizes the v1.26 and v1.27 caves as old (state 3). In-game status checks the word at 0x17169dc (e3560002).
   - Removed: the layer/wait status lines, the custom ID input, the console, the 原作者窗口 section, and the 恢复原作者窗口 option.
+- 23:22 v1.28 test: GIVE WORKS through AddAvaItem P... on the PC. Every diagnostic came back as 走完 with result 1.
+  - User feedback: the helmet given was level 2 (30304000003 = Avatar/Common/Helmet/30304000003/Helmet02_*). The armor 30305000002 was level 1. No attachments were given. The coat was wrong: both 30315000061 and 050 are not the 风衣.
+- ID sources: UTF-32 strings in libUE4.
+  - Auto-pickup DF list at 0x42c9c64: 401000000x1-3, 401010000x1-3, 2040100000x1-4, attachments 20503000001/3/8/4/9/5, 20504000001, 20501000001, 20502000001, 20505000001.
+  - GM list at 0x44502cc.
+  - Gun folders W2010x000y map to id 2010x00000y.
+- getall works and prints into the sd log. Server DoCmd ("spawn", "avehicle") is stripped from the client. CheatManager Summon exists ("Fabricate %s").
+- v1.29 (vc 30, core 30):
+  - App label changed to 艾挽补丁更新 (same UTF-16 length; rel.py patches it). Single page: 更新 + 启动游戏 (import only when not injected). The nav and modules are hidden.
+  - 更新 now runs runSound(toAk=true) directly. Shorter progress and toast text. Done toast: "更新完成，打开游戏就行".
+  - Panel: more guns, a 全套配件 button (ATT list), and toasts shortened to "已刷 X" / "X 没刷出来".
+  - 刷车: getall WheeledVehicle/NZVehicleMotoCycle bHidden, Con.line parses the *_C class names, then EnableCheats + Summon <cls>, cycling through the classes.
+  - Logs "身上装备编号:" from OnAvatarAssembler, to discover level-3 helmet/armor IDs and the coat ID.

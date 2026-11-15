@@ -316,7 +316,7 @@ public class Patcher {
             offs = new long[GI_OFF.length + 1]; reps = new byte[GI_OFF.length + 1][];
             offs[0] = SND_OFF; reps[0] = want;
             for (int k = 0; k < GI_OFF.length; k++) { offs[k + 1] = GI_OFF[k]; reps[k + 1] = hex(toAk ? GI_N[k] : GI_O[k]); }
-            log.log(toAk ? "加刷物品补丁（GiveItem 接到发装备代码）" : "还原刷物品补丁");
+            log.log(toAk ? "刷物品补丁" : "还原刷物品补丁");
         }
         byte[] buf = new byte[1 << 16];
         try (ZipFile zf = new ZipFile(in);
@@ -331,7 +331,7 @@ public class Patcher {
                 if (newDex != null && n.matches("^classes\\d*\\.dex$")) {
                     byte[] d = readAll(zf.getInputStream(e));
                     if (isOurDex(d)) {
-                        log.log("更新游戏内置内核 " + n);
+                        log.log("更新内核");
                         ZipEntry de = new ZipEntry(n);
                         de.setMethod(ZipEntry.DEFLATED);
                         zo.putNextEntry(de); zo.write(newDex); zo.closeEntry();
@@ -346,9 +346,9 @@ public class Patcher {
                         byte[] stub = readAll(zf.getInputStream(z));
                         if (!java.util.Arrays.equals(cur, stub)) {
                             try (OutputStream o = new FileOutputStream(backup)) { o.write(cur); }
-                            log.log("已备份原作者库 " + (cur.length >> 10) + " KB");
+                            
                         }
-                        d = stub; log.log("关掉原作者窗口");
+                        d = stub;
                     } else {
                         if (backup == null || !backup.isFile()) throw new IOException("没有找到原作者库的备份，不能恢复");
                         try (InputStream bi = new FileInputStream(backup)) { d = readAll(bi); }
@@ -376,7 +376,7 @@ public class Patcher {
                         ne.setCrc(c.getValue());
                     } else ne.setCrc(e.getCrc());
                 }
-                if (lib) log.log("改 libUE4.so（" + (e.getSize() >> 20) + " MB）…");
+                if (lib) log.log("改游戏库…");
                 zo.putNextEntry(ne);
                 try (InputStream is = zf.getInputStream(e)) {
                     if (lib) copyPatched(is, zo, offs, reps, null);

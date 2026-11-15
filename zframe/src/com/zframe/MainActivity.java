@@ -123,9 +123,11 @@ public class MainActivity extends Activity {
     }
 
     void show(int t) {
-        tab = t;
+        tab = 1;
         content.removeAllViews();
-        buildNav();
+        nav.removeAllViews(); nav.setVisibility(android.view.View.GONE);
+        showMain();
+        if (true) return;
         switch (t) {
             case 0: showHome(); break;
             case 1: showGames(); break;
@@ -137,6 +139,43 @@ public class MainActivity extends Activity {
     void header(String title, String subtitle) {
         u.text(content, title, 24, Ui.TEXT, true);
         if (subtitle != null) u.sub(content, subtitle).setPadding(0, 0, 0, u.dp(10));
+    }
+
+
+    // ================= v1.29 艾挽补丁更新：只留更新 =================
+    static final String GAME = "com.tencent.tmgp.pubgm";
+    void showMain() {
+        header("艾挽补丁更新", "v" + version());
+        PackageManager pm = getPackageManager();
+        ApplicationInfo ai = null;
+        try { ai = pm.getApplicationInfo(GAME, 0); } catch (Exception ignored) {}
+        boolean ours = ai != null && Patcher.signedByUs(this, GAME);
+        if (ours) { Set<String> g = games(); if (g.add(GAME)) saveGames(g); }
+        LinearLayout c = u.card(content);
+        LinearLayout r = u.row();
+        c.addView(r);
+        if (ai != null) {
+            ImageView iv = new ImageView(this);
+            iv.setImageDrawable(ai.loadIcon(pm));
+            r.addView(iv, new LinearLayout.LayoutParams(u.dp(48), u.dp(48)));
+        }
+        LinearLayout info = u.col();
+        info.setPadding(u.dp(12), 0, 0, 0);
+        r.addView(info, new LinearLayout.LayoutParams(0, -2, 1));
+        u.text(info, ai != null ? ai.loadLabel(pm).toString() : "全军出击", 16, Ui.TEXT, true);
+        LinearLayout chips = u.row();
+        info.addView(chips);
+        if (ai == null) u.chip(chips, "未安装", Ui.RED);
+        else if (ours) u.chip(chips, "已注入", Ui.CYAN);
+        else u.chip(chips, "未注入", Ui.PURPLE);
+        if (ours) {
+            u.primary(c, "更新", v -> soundPatch(GAME));
+            u.ghost(c, "启动游戏", v -> launchGame(GAME, false));
+        } else {
+            u.primary(c, "导入游戏安装包", v -> pick(REQ_APK));
+            if (ai != null) u.ghost(c, "从已安装的游戏注入", v -> pickInstalled());
+            if (pendingApks != null) u.ghost(c, "继续安装", v -> install(pendingApks, pendingPkg));
+        }
     }
 
     // ================= 首页 =================
@@ -366,7 +405,7 @@ public class MainActivity extends Activity {
 
     void doPatch(List<File> apks, boolean inject) {
         if (!getPackageManager().canRequestPackageInstalls()) {
-            toast("请允许 ZFrame 安装应用，然后回来重试");
+            toast("请允许安装应用，然后回来再点");
             startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
             return;
         }
@@ -410,13 +449,13 @@ public class MainActivity extends Activity {
     /** v1.20 声音补丁：读已安装的游戏，只改 libUE4.so 里一个模块名，用同一把钥匙重签后覆盖安装（不卸载，存档和数据包都在） */
     void soundPatch(String pkg) {
         if (!getPackageManager().canRequestPackageInstalls()) {
-            toast("请允许 ZFrame 安装应用，然后回来重试");
+            toast("请允许安装应用，然后回来再点");
             startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
             return;
         }
         if (!Patcher.signedByUs(this, pkg)) {
-            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能打声音补丁")
-                    .setMessage("这个游戏不是用 ZFrame 的签名装的，覆盖安装会要求卸载，所以不做。").setPositiveButton("好", null).show();
+            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能更新")
+                    .setMessage("这个游戏不是用本工具装的，覆盖安装会要求卸载，所以不做。").setPositiveButton("好", null).show();
             return;
         }
         final ApplicationInfo ai;
@@ -431,27 +470,8 @@ public class MainActivity extends Activity {
             endProgress();
             final int fs = st, fm = mst, fg = gst;
             h.post(() -> {
-                if (fs == 1) confirmSound(pkg, ai, true,
-                        "会把游戏包里 libUE4.so 的一个模块名（32 字节）改掉，让引擎加载 Wwise 声音模块，同时更新游戏内置的艾挽内核。\n"
-                        + "覆盖安装，不卸载，存档和数据包都保留。需要几分钟，期间别切走。\n"
-                        + "如果打完进不去游戏，回到这里再点「修补游戏」就能还原声音补丁。");
-                else if (fs == 2) {
-                    final int ms = fm;
-                    final String[] items = ms == 1
-                            ? new String[]{"更新内核", "更新内核 + 关掉原作者窗口", "去掉声音补丁"}
-                            : new String[]{"更新内核", "去掉声音补丁"};
-                    new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                        .setTitle(fg == 1 ? "修补游戏（这次会加上刷物品补丁）" : fg == 3 ? "修补游戏（这次会更新刷物品补丁）" : "修补游戏")
-                        .setItems(items, (d, w) -> {
-                            String it = items[w];
-                            if (it.startsWith("去掉")) runSound(pkg, ai, false, 0);
-                            else if (it.contains("关掉")) runSound(pkg, ai, true, 1);
-                            else if (it.contains("恢复")) runSound(pkg, ai, true, 2);
-                            else runSound(pkg, ai, true, 0);
-                        })
-                        .setNegativeButton("取消", null).show();
-                }
-                else new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能打声音补丁")
+                if (fs == 1 || fs == 2) runSound(pkg, ai, true, fm == 1 ? 1 : 0);
+                else new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能更新")
                         .setMessage(fs == 0 ? "libUE4.so 对应位置的内容和预期不一样（游戏版本不同），为了不闪退，不改。" : "读取游戏安装包失败。")
                         .setPositiveButton("好", null).show();
             });
@@ -468,21 +488,20 @@ public class MainActivity extends Activity {
     void runSound(String pkg, ApplicationInfo ai, boolean toAk) { runSound(pkg, ai, toAk, 0); }
 
     void runSound(String pkg, ApplicationInfo ai, boolean toAk, int mczi) {
-        showProgress(toAk ? "修补游戏" : "还原声音补丁");
+        showProgress(toAk ? "更新中" : "还原中");
         bg(() -> {
             try {
                 File out = new File(getExternalFilesDir(null), "soundfix");
                 deleteRec(out);
                 out.mkdirs();
                 File tmp = new File(out, "base_unsigned.apk");
-                plog("复制游戏包…");
+                plog("准备…");
                 Patcher.patchSound(new File(ai.sourceDir), tmp, toAk, Patcher.readAll(getAssets().open("inject.dex")), mczi, new File(getFilesDir(), "libMczi.orig.so"), this::plog);
-                plog("签名中（大游戏需要几分钟）…");
+                plog("签名（要几分钟）…");
                 File base = new File(out, "base.apk");
                 Patcher.sign(this, tmp, base);
                 tmp.delete();
                 if (Patcher.soundState(base) != (toAk ? 2 : 1)) throw new IOException("校验失败，没有安装，游戏没变");
-                try { int g = Patcher.giveState(base); plog("刷物品补丁：" + (g == 2 ? "已打（v1.27 带诊断）" : g == 1 ? "没打（原版）" : g == 3 ? "旧版" : "对不上")); } catch (Throwable ignored) {}
                 List<File> result = new ArrayList<>();
                 result.add(base);
                 if (ai.splitSourceDirs != null) for (String sd : ai.splitSourceDirs) {
@@ -491,13 +510,13 @@ public class MainActivity extends Activity {
                     try (InputStream in = new FileInputStream(f); OutputStream o = new FileOutputStream(c)) { copy(in, o); }
                     result.add(c);
                 }
-                plog("完成，开始覆盖安装");
+                plog("安装…");
                 endProgress();
                 h.post(() -> { soundInstall = true; install(result, pkg); });
             } catch (Throwable e) {
                 endProgress();
                 h.post(() -> new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                        .setTitle("声音补丁失败").setMessage(String.valueOf(e) + "\n游戏没有被改动。").setPositiveButton("好", null).show());
+                        .setTitle("更新失败").setMessage(String.valueOf(e) + "\n游戏没有被改动。").setPositiveButton("好", null).show());
             }
         });
     }
@@ -548,7 +567,7 @@ public class MainActivity extends Activity {
                 Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
                 if (confirm != null) { confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(confirm); }
             } else if (st == PackageInstaller.STATUS_SUCCESS) {
-                if (soundInstall) { soundInstall = false; toast("声音补丁装好了，打开游戏试试有没有声音"); show(1); return; }
+                if (soundInstall) { soundInstall = false; toast("更新完成，打开游戏就行"); show(1); return; }
                 Set<String> p = patched(); p.add(pkg);
                 sp.edit().putStringSet("patched", p).apply();
                 pendingApks = null;
@@ -557,7 +576,7 @@ public class MainActivity extends Activity {
             } else if (soundInstall && st != PackageInstaller.STATUS_SUCCESS) {
                 soundInstall = false;
                 if (st != PackageInstaller.STATUS_FAILURE_ABORTED)
-                    toast("声音补丁没装上：" + i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) + "（游戏没变）");
+                    toast("更新没装上：" + i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
             } else if (st == PackageInstaller.STATUS_FAILURE_CONFLICT || st == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE) {
                 Set<String> p = patched(); p.remove(pkg);
                 sp.edit().putStringSet("patched", p).apply();
