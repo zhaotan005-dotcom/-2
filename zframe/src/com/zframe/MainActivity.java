@@ -239,6 +239,7 @@ public class MainActivity extends Activity {
             LinearLayout br = u.row();
             g.addView(br);
             u.primary(br, "启动", v -> launchGame(pkg, true));
+            if (installed && pt.contains(pkg) && !isTool) u.ghost(br, "声音补丁", v -> soundPatch(pkg));
             if (root) u.ghost(br, "Root改", v -> { target = pkg; sp.edit().putString("target", pkg).apply(); launchGame(pkg, true); show(3); });
             u.danger(br, "移除", v -> { Set<String> s = games(); s.remove(pkg); saveGames(s); show(1); });
         }
@@ -399,6 +400,83 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** v1.20 声音补丁：读已安装的游戏，只改 libUE4.so 里一个模块名，用同一把钥匙重签后覆盖安装（不卸载，存档和数据包都在） */
+    void soundPatch(String pkg) {
+        if (!getPackageManager().canRequestPackageInstalls()) {
+            toast("请允许 ZFrame 安装应用，然后回来重试");
+            startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+            return;
+        }
+        if (!Patcher.signedByUs(this, pkg)) {
+            new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能打声音补丁")
+                    .setMessage("这个游戏不是用 ZFrame 的签名装的，覆盖安装会要求卸载，所以不做。").setPositiveButton("好", null).show();
+            return;
+        }
+        final ApplicationInfo ai;
+        try { ai = getPackageManager().getApplicationInfo(pkg, 0); } catch (Exception e) { toast("找不到游戏"); return; }
+        showProgress("检查游戏");
+        bg(() -> {
+            int st;
+            try { st = Patcher.soundState(new File(ai.sourceDir)); } catch (Throwable e) { st = -1; }
+            endProgress();
+            final int fs = st;
+            h.post(() -> {
+                if (fs == 1) confirmSound(pkg, ai, true,
+                        "会把游戏包里 libUE4.so 的一个模块名（32 字节）改掉，让引擎加载 Wwise 声音模块。\n"
+                        + "覆盖安装，不卸载，存档和数据包都保留。需要几分钟，期间别切走。\n"
+                        + "如果打完进不去游戏，回到这里再点「声音补丁」就能还原。");
+                else if (fs == 2) confirmSound(pkg, ai, false,
+                        "声音补丁已经打上了。要还原成原来的 libUE4.so 吗？（同样是覆盖安装，不卸载）");
+                else new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("不能打声音补丁")
+                        .setMessage(fs == 0 ? "libUE4.so 对应位置的内容和预期不一样（游戏版本不同），为了不闪退，不改。" : "读取游戏安装包失败。")
+                        .setPositiveButton("好", null).show();
+            });
+        });
+    }
+
+    void confirmSound(String pkg, ApplicationInfo ai, boolean toAk, String msg) {
+        new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle(toAk ? "打声音补丁" : "还原声音补丁").setMessage(msg)
+                .setPositiveButton(toAk ? "开始" : "还原", (d, w) -> runSound(pkg, ai, toAk))
+                .setNegativeButton("取消", null).show();
+    }
+
+    void runSound(String pkg, ApplicationInfo ai, boolean toAk) {
+        showProgress(toAk ? "打声音补丁" : "还原声音补丁");
+        bg(() -> {
+            try {
+                File out = new File(getExternalFilesDir(null), "soundfix");
+                deleteRec(out);
+                out.mkdirs();
+                File tmp = new File(out, "base_unsigned.apk");
+                plog("复制游戏包…");
+                Patcher.patchSound(new File(ai.sourceDir), tmp, toAk, this::plog);
+                plog("签名中（大游戏需要几分钟）…");
+                File base = new File(out, "base.apk");
+                Patcher.sign(this, tmp, base);
+                tmp.delete();
+                if (Patcher.soundState(base) != (toAk ? 2 : 1)) throw new IOException("校验失败，没有安装，游戏没变");
+                List<File> result = new ArrayList<>();
+                result.add(base);
+                if (ai.splitSourceDirs != null) for (String sd : ai.splitSourceDirs) {
+                    File f = new File(sd);
+                    File c = new File(out, "split_" + f.getName());
+                    try (InputStream in = new FileInputStream(f); OutputStream o = new FileOutputStream(c)) { copy(in, o); }
+                    result.add(c);
+                }
+                plog("完成，开始覆盖安装");
+                endProgress();
+                h.post(() -> { soundInstall = true; install(result, pkg); });
+            } catch (Throwable e) {
+                endProgress();
+                h.post(() -> new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                        .setTitle("声音补丁失败").setMessage(String.valueOf(e) + "\n游戏没有被改动。").setPositiveButton("好", null).show());
+            }
+        });
+    }
+
+    boolean soundInstall = false;
+
     boolean isInstalled(String pkg) {
         try { getPackageManager().getPackageInfo(pkg, 0); return true; } catch (Exception e) { return false; }
     }
@@ -443,11 +521,16 @@ public class MainActivity extends Activity {
                 Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
                 if (confirm != null) { confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(confirm); }
             } else if (st == PackageInstaller.STATUS_SUCCESS) {
+                if (soundInstall) { soundInstall = false; toast("声音补丁装好了，打开游戏试试有没有声音"); show(1); return; }
                 Set<String> p = patched(); p.add(pkg);
                 sp.edit().putStringSet("patched", p).apply();
                 pendingApks = null;
                 toast("安装成功！打开游戏点悬浮球 Z 打开游戏菜单");
                 show(1);
+            } else if (soundInstall && st != PackageInstaller.STATUS_SUCCESS) {
+                soundInstall = false;
+                if (st != PackageInstaller.STATUS_FAILURE_ABORTED)
+                    toast("声音补丁没装上：" + i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) + "（游戏没变）");
             } else if (st == PackageInstaller.STATUS_FAILURE_CONFLICT || st == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE) {
                 Set<String> p = patched(); p.remove(pkg);
                 sp.edit().putStringSet("patched", p).apply();

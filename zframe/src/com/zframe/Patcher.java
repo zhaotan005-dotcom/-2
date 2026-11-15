@@ -170,6 +170,118 @@ public class Patcher {
         tmp.delete();
     }
 
+    // ================= 声音补丁（v1.20） =================
+    // 游戏的 Wwise 模块（AkAudio）从来没被加载。引擎开机约 3 秒时会在游戏线程里加载一个不存在的模块
+    // "SoftwareOcclusionCulling"（只加载一次，返回值只存起来不用）。把这个 UTF-32 名字改成 "AkAudio"，
+    // 引擎就会自己把 Wwise 模块加载起来。只改 libUE4.so 里 32 字节，可以随时还原。
+    public static final String UE4_LIB = "lib/armeabi-v7a/libUE4.so";
+    public static final long SND_OFF = 0x45e7104L;
+    public static final byte[] SND_ORIG = u32("SoftwareOcclusionCulling");   // 100 字节（含结尾 0）
+    public static final byte[] SND_NEW;
+    static {
+        byte[] ak = u32("AkAudio");            // 32 字节
+        SND_NEW = SND_ORIG.clone();
+        System.arraycopy(ak, 0, SND_NEW, 0, ak.length);
+    }
+
+    static byte[] u32(String s) {
+        byte[] b = new byte[(s.length() + 1) * 4];
+        for (int i = 0; i < s.length(); i++) b[i * 4] = (byte) s.charAt(i);
+        return b;
+    }
+
+    /** 返回 1=原版，2=已打声音补丁，0=对不上（不是这个版本的 libUE4，不能改） */
+    public static int soundState(File apk) throws IOException {
+        try (ZipFile zf = new ZipFile(apk)) {
+            ZipEntry e = zf.getEntry(UE4_LIB);
+            if (e == null) return 0;
+            byte[] cur = new byte[SND_ORIG.length];
+            try (InputStream is = zf.getInputStream(e)) {
+                skipFully(is, SND_OFF);
+                readFully(is, cur);
+            }
+            if (Arrays.equals(cur, SND_ORIG)) return 1;
+            if (Arrays.equals(cur, SND_NEW)) return 2;
+            return 0;
+        }
+    }
+
+    static void skipFully(InputStream is, long n) throws IOException {
+        byte[] b = new byte[1 << 16];
+        while (n > 0) { int r = is.read(b, 0, (int) Math.min(b.length, n)); if (r < 0) throw new EOFException(); n -= r; }
+    }
+
+    static void readFully(InputStream is, byte[] b) throws IOException {
+        int o = 0;
+        while (o < b.length) { int r = is.read(b, o, b.length - o); if (r < 0) throw new EOFException(); o += r; }
+    }
+
+    /** 把 libUE4.so 从 InputStream 复制到 out，同时把 SND_OFF 处的字节换成 repl */
+    static void copyPatched(InputStream is, OutputStream out, byte[] repl, CRC32 crc) throws IOException {
+        byte[] b = new byte[1 << 16];
+        long pos = 0; int r;
+        long ps = SND_OFF, pe = SND_OFF + repl.length;
+        while ((r = is.read(b)) > 0) {
+            long s = pos, e = pos + r;
+            if (e > ps && s < pe) {
+                long from = Math.max(s, ps), to = Math.min(e, pe);
+                System.arraycopy(repl, (int) (from - ps), b, (int) (from - s), (int) (to - from));
+            }
+            if (crc != null) crc.update(b, 0, r);
+            if (out != null) out.write(b, 0, r);
+            pos = e;
+        }
+    }
+
+    /** 复制已注入的游戏 base.apk，只改 libUE4.so 那 32 字节（toAk=true 打补丁，false 还原），其它原样 */
+    public static void patchSound(File in, File outUnsigned, boolean toAk, Log log) throws IOException {
+        byte[] want = toAk ? SND_NEW : SND_ORIG;
+        byte[] buf = new byte[1 << 16];
+        try (ZipFile zf = new ZipFile(in);
+             ZipOutputStream zo = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outUnsigned), 1 << 16))) {
+            Enumeration<? extends ZipEntry> en = zf.entries();
+            while (en.hasMoreElements()) {
+                ZipEntry e = en.nextElement();
+                String n = e.getName();
+                if (e.isDirectory()) continue;
+                if (n.startsWith("META-INF/") && (n.endsWith(".SF") || n.endsWith(".RSA") || n.endsWith(".DSA")
+                        || n.endsWith(".EC") || n.equals("META-INF/MANIFEST.MF"))) continue;
+                ZipEntry ne = new ZipEntry(n);
+                boolean lib = n.equals(UE4_LIB);
+                if (e.getMethod() == ZipEntry.STORED) {
+                    ne.setMethod(ZipEntry.STORED);
+                    ne.setSize(e.getSize());
+                    ne.setCompressedSize(e.getSize());
+                    if (lib) {
+                        CRC32 c = new CRC32();
+                        try (InputStream is = zf.getInputStream(e)) { copyPatched(is, null, want, c); }
+                        ne.setCrc(c.getValue());
+                    } else ne.setCrc(e.getCrc());
+                }
+                if (lib) log.log("改 libUE4.so（" + (e.getSize() >> 20) + " MB）…");
+                zo.putNextEntry(ne);
+                try (InputStream is = zf.getInputStream(e)) {
+                    if (lib) copyPatched(is, zo, want, null);
+                    else { int r; while ((r = is.read(buf)) > 0) zo.write(buf, 0, r); }
+                }
+                zo.closeEntry();
+            }
+        }
+    }
+
+    /** 已安装的游戏是不是用 ZFrame 的钥匙签的（是才能覆盖安装，不用卸载） */
+    public static boolean signedByUs(Context ctx, String pkg) {
+        try {
+            byte[] mine = readAll(ctx.getAssets().open("gcert.der"));
+            android.content.pm.PackageInfo pi = ctx.getPackageManager().getPackageInfo(pkg,
+                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES);
+            android.content.pm.Signature[] sg = pi.signingInfo.hasMultipleSigners()
+                    ? pi.signingInfo.getApkContentsSigners() : pi.signingInfo.getSigningCertificateHistory();
+            for (android.content.pm.Signature s : sg) if (Arrays.equals(s.toByteArray(), mine)) return true;
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
     public static byte[] readAll(InputStream in) throws IOException {
         try (InputStream i = in) {
             ByteArrayOutputStream bo = new ByteArrayOutputStream();

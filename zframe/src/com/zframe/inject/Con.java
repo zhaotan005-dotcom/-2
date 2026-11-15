@@ -191,13 +191,13 @@ public class Con {
 
     static void loadAudioPref() {
         Activity a = act; if (a == null) return;
-        audioAuto = a.getSharedPreferences("zframe", 0).getBoolean("audio_auto", true);
+        audioAuto = a.getSharedPreferences("zframe", 0).getBoolean("audio_auto2", false);
     }
 
     public static void setAudioAuto(boolean on) {
         audioAuto = on;
         Activity a = act;
-        if (a != null) a.getSharedPreferences("zframe", 0).edit().putBoolean("audio_auto", on).apply();
+        if (a != null) a.getSharedPreferences("zframe", 0).edit().putBoolean("audio_auto2", on).apply();
     }
 
     /** 手动：现在就经大厅重进当前地图 */

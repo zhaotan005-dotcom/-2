@@ -29,27 +29,15 @@ public class AkDiag {
         return new File(base, "Config/Android/Engine.ini");
     }
 
+    /** v1.20：游戏只认加密的 Engine.ini，明文诊断行没用还会报 invalid config，所以只做清理 */
     public static void prepare(Context ctx) {
         try {
-            SharedPreferences p = sp(ctx);
             File ini = iniFile();
-            if (p.getBoolean("akdiag_off", false)) { remove(ini); status = "已自动关闭（上次开启后引擎没起来）"; return; }
-            if (p.getLong("akdiag_boot", 0) != 0) {
-                // 上次写了诊断行但引擎没就绪 → 可能是它导致的，关掉
-                remove(ini);
-                p.edit().putBoolean("akdiag_off", true).putLong("akdiag_boot", 0).commit();
-                status = "已自动关闭（上次开启后引擎没起来）";
-                LogCap.note("声音诊断: 上次启动没到引擎就绪，已删掉 Engine.ini 诊断行并关闭");
-                return;
-            }
-            write(ini);
-            p.edit().putLong("akdiag_boot", System.currentTimeMillis()).commit();
-            status = "已开启（看日志里的 声音日志 行）";
-            LogCap.note("声音诊断: 已写入 " + ini.getPath());
-        } catch (Throwable e) {
-            status = "写入失败 " + e.getClass().getSimpleName();
-            LogCap.note("声音诊断: 写入失败 " + e);
-        }
+            remove(ini);
+            if (ini.exists() && read(ini).trim().isEmpty()) ini.delete();
+            sp(ctx).edit().putLong("akdiag_boot", 0).apply();
+            status = "已关闭（v1.19 写的诊断行已清理）";
+        } catch (Throwable e) { status = "清理失败 " + e.getClass().getSimpleName(); }
     }
 
     static void engineUp(Activity a) {
