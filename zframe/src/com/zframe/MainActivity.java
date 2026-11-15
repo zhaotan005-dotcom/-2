@@ -439,10 +439,9 @@ public class MainActivity extends Activity {
                     final int ms = fm;
                     final String[] items = ms == 1
                             ? new String[]{"更新内核", "更新内核 + 关掉原作者窗口", "去掉声音补丁"}
-                            : ms == 2 ? new String[]{"更新内核", "更新内核 + 恢复原作者窗口", "去掉声音补丁"}
                             : new String[]{"更新内核", "去掉声音补丁"};
                     new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                        .setTitle(fg == 1 ? "修补游戏（这次会加上刷物品补丁）" : fg == 2 ? "修补游戏（刷物品补丁已在）" : fg == 3 ? "修补游戏（这次会更新刷物品补丁）" : "修补游戏（覆盖安装，不卸载）")
+                        .setTitle(fg == 1 ? "修补游戏（这次会加上刷物品补丁）" : fg == 3 ? "修补游戏（这次会更新刷物品补丁）" : "修补游戏")
                         .setItems(items, (d, w) -> {
                             String it = items[w];
                             if (it.startsWith("去掉")) runSound(pkg, ai, false, 0);

@@ -125,3 +125,13 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - Removed the sound and QCC toggles from the panel; audioAuto and Qcc.up are forced on.
   - Tweaks added: set NZSystemSettingData FrameRateOption 4, RenderQualityOption 0; set GameEngine bSmoothFrameRate 0; t.MaxFPS = the screen's max refresh rate, plus a window preferredDisplayMode at max refresh.
   - ApplyFrameRateOption (0xca24ac) takes its FPS table from [this+0x88][DeviceLevel]; at level 5, option 4 = 60.
+- 23:03 v1.27 test: every diagnostic said "补丁代码没被调用". The GiveItem exec on the pawn is never reached (God/BugItGo on CheatManager do work).
+- RE findings:
+  - Thunk 0xe40c58 is identical-code-folded. It is shared by ANZCharacter::GiveItem, ANZBRPlayerController::AddAvaItem / RemoveAvaItem, and ANZPlayerController::ServerCmd, so all of them now reach the cave.
+  - AController offsets: Pawn +0x2b4, Character +0x2c0, PlayerState +0x2c4.
+  - Exec function list: /tmp/execs2.txt. Regenerate with the scan of FFunctionParams (name, 0x45, 0, flags & 0x200).
+- v1.28 (vc 29, core 29):
+  - The cave acts only when the string starts with 'P'. It then takes pawn = [PC+0x2c0].
+  - Java sends "AddAvaItem P<id>x<n>x<dbgaddr>".
+  - Patcher recognizes the v1.26 and v1.27 caves as old (state 3). In-game status checks the word at 0x17169dc (e3560002).
+  - Removed: the layer/wait status lines, the custom ID input, the console, the 原作者窗口 section, and the 恢复原作者窗口 option.

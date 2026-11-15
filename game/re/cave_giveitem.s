@@ -1,10 +1,19 @@
-; GiveItem cave at 0x17169c0 (old OnBtnGiveGrenade body). r0=character, r1=&FString(UTF-32)
+; GiveItem cave at 0x17169c0 (old OnBtnGiveGrenade body). Shared 1-FString exec thunk (GiveItem/AddAvaItem/ServerCmd).
+; v1.28: only acts when the string starts with 'P' and r0 is the PlayerController (AddAvaItem); pawn = [PC+0x2c0] (AController::Character)
     push {r4-r11, lr}
     sub sp, sp, #0x44
     mov r4, r0
     ldr r5, [r1]
     ldr r6, [r1, #4]
     cmp r5, #0
+    beq out
+    cmp r6, #2
+    blt out
+    ldr r0, [r5]
+    cmp r0, #80
+    bne out
+    ldr r4, [r4, #0x2c0]
+    cmp r4, #0
     beq out
     mov r7, #0
     mov r8, #0

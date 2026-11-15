@@ -199,14 +199,15 @@ public class GameOverlay {
     static void give(Activity a, String id, int n) {
         if (dbg == null) { dbg = java.nio.ByteBuffer.allocateDirect(64).order(java.nio.ByteOrder.LITTLE_ENDIAN); dbgAddr = bufAddr(dbg); }
         for (int i = 0; i < 64; i += 4) dbg.putInt(i, 0);
-        String c = "GiveItem " + id + "x" + Math.max(1, n);
+        // v1.28：GiveItem 走不到人物身上；改用控制器上的 AddAvaItem（同一个入口），P 开头表示由补丁代码去找控制器的人物
+        String c = "AddAvaItem P" + id + "x" + Math.max(1, n);
         if (dbgAddr > 0 && dbgAddr < 0xFFFFFFFFL) c += "x" + dbgAddr;
         Con.exec(c);
     }
     static String dbgText() {
         if (dbg == null) return "没有诊断";
         int m = dbg.getInt(0);
-        if (m == 0) return dbgAddr == 0 ? "诊断缓冲区拿不到地址" : "补丁代码没被调用（命令没走到人物身上）";
+        if (m == 0) return dbgAddr == 0 ? "诊断缓冲区拿不到地址" : "补丁代码没被调用";
         return String.format("进入=%s 人物=%08x 背包=%08x 类型=%d 子编号=%d 数量=%d 可放=%d 结果=%d",
                 m == 0x5a02 ? "走完" : "中途", dbg.getInt(4), dbg.getInt(8), dbg.getInt(12), dbg.getInt(16), dbg.getInt(20), dbg.getInt(24), dbg.getInt(28));
     }
@@ -225,10 +226,15 @@ public class GameOverlay {
             giveSt = -2;
             new Thread(() -> { giveSt = readGive(a); LogCap.note("刷物品补丁状态 " + giveSt); }).start();
         }
-        return giveSt == 2 ? "已打" : giveSt == 1 ? "没打（ZFrame → 修补游戏 → 更新内核）" : giveSt == 0 ? "查不到（照样可以试）" : "检查中，切一下分页刷新";
+        return giveSt == 2 ? "补丁已打" : giveSt == 1 ? "补丁没打：ZFrame → 修补游戏 → 更新内核" : giveSt == 3 ? "补丁是旧版：ZFrame → 修补游戏 → 更新内核" : giveSt == 0 ? "补丁状态查不到（照样可以试）" : "检查补丁中…";
     }
     static int readGive(Activity a) {
-        final long off = 0xe40cccL;
+        int w = readWord(a, 0xe40cccL);
+        if (w == 0xebf48b57) return 1;
+        if (w != 0xeb23573b) return 0;
+        return readWord(a, 0x17169dcL) == 0xe3560002 ? 2 : 3;
+    }
+    static int readWord(Activity a, final long off) {
         byte[] cur = new byte[4];
         try {
             java.io.File f = new java.io.File(a.getApplicationInfo().nativeLibraryDir, "libUE4.so");
@@ -246,10 +252,7 @@ public class GameOverlay {
                 }
             }
         } catch (Throwable e) { return 0; }
-        int w = (cur[0] & 0xff) | (cur[1] & 0xff) << 8 | (cur[2] & 0xff) << 16 | (cur[3] & 0xff) << 24;
-        if (w == 0xeb23573b) return 2;
-        if (w == 0xebf48b57) return 1;
-        return 0;
+        return (cur[0] & 0xff) | (cur[1] & 0xff) << 8 | (cur[2] & 0xff) << 16 | (cur[3] & 0xff) << 24;
     }
 
     static void fill(final Activity a, final Ui u, final LinearLayout root) {
@@ -274,10 +277,8 @@ public class GameOverlay {
                 if (c == null) { toast(a, "还没拿到安全区位置，等飞机起飞后再点"); return; }
                 cmd(a, "EnableCheats"); cmd(a, "BugItGo " + c + " 15000 0 0 0", "已传送到安全区中心上空");
             });
-            label(a, root, "门/物资/车：" + Con.layerStatus(), 12, false, SUBT).setPadding(0, u.dp(6), 0, 0);
-            label(a, root, "开局等待：" + Patches.waitStatus, 12, false, SUBT);
-            head(a, u, root, "刷物品（要先打刷物品补丁）");
-            label(a, root, "补丁：" + giveText(a), 12, false, SUBT);
+            head(a, u, root, "刷物品");
+            if (giveSt != 2) label(a, root, giveText(a), 12, false, SUBT);
             LinearLayout g0 = row(a, root);
             btn(a, u, g0, "一键开局装备", () -> {
                 give(a, "20101000001", 1); give(a, "20600000001", 120); give(a, "20600000002", 120); give(a, "20600000003", 120);
@@ -302,41 +303,7 @@ public class GameOverlay {
             LinearLayout g4 = row(a, root);
             btn(a, u, g4, "风衣A 061", () -> give(a, "30315000061", 1, "风衣 30315000061"));
             btn(a, u, g4, "风衣B 050", () -> give(a, "30315000050", 1, "风衣 30315000050"));
-            LinearLayout g5 = row(a, root);
-            final EditText gid = new EditText(a);
-            gid.setHint("物品编号"); gid.setTextColor(TXT); gid.setHintTextColor(SUBT); gid.setTextSize(13);
-            gid.setSingleLine(true); gid.setInputType(InputType.TYPE_CLASS_NUMBER);
-            gid.setBackground(box(0xFFFFFFFF, u.dp(4))); gid.setPadding(u.dp(8), u.dp(6), u.dp(8), u.dp(6));
-            LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(0, -2, 3);
-            glp.setMargins(0, u.dp(3), u.dp(6), u.dp(3));
-            g5.addView(gid, glp);
-            final EditText gn = new EditText(a);
-            gn.setHint("数量"); gn.setText("1"); gn.setTextColor(TXT); gn.setHintTextColor(SUBT); gn.setTextSize(13);
-            gn.setSingleLine(true); gn.setInputType(InputType.TYPE_CLASS_NUMBER);
-            gn.setBackground(box(0xFFFFFFFF, u.dp(4))); gn.setPadding(u.dp(8), u.dp(6), u.dp(8), u.dp(6));
-            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(0, -2, 1);
-            nlp.setMargins(0, u.dp(3), u.dp(6), u.dp(3));
-            g5.addView(gn, nlp);
-            btn(a, u, g5, "发", () -> {
-                String id = gid.getText().toString().trim();
-                int n = 1; try { n = Integer.parseInt(gn.getText().toString().trim()); } catch (Throwable ignored) {}
-                if (id.length() < 5) { toast(a, "填物品编号"); return; }
-                give(a, id, n, id + " ×" + n);
-            });
         } else {
-            head(a, u, root, "原作者窗口");
-            label(a, root, mcziText(a), 12, false, SUBT);
-            head(a, u, root, "控制台");
-            LinearLayout r4 = row(a, root);
-            final EditText in = new EditText(a);
-            in.setHint("引擎命令"); in.setTextColor(TXT); in.setHintTextColor(SUBT); in.setTextSize(13);
-            in.setSingleLine(true); in.setInputType(InputType.TYPE_CLASS_TEXT);
-            in.setBackground(box(0xFFFFFFFF, u.dp(4)));
-            in.setPadding(u.dp(8), u.dp(6), u.dp(8), u.dp(6));
-            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(0, -2, 2);
-            ilp.setMargins(0, u.dp(3), u.dp(6), u.dp(3));
-            r4.addView(in, ilp);
-            btn(a, u, r4, "执行", () -> { String c = in.getText().toString().trim(); if (!c.isEmpty()) cmd(a, c, "已执行"); });
             head(a, u, root, "日志");
             final TextView st = label(a, root, LogCap.status(), 12, false, SUBT);
             LinearLayout r5 = row(a, root);
