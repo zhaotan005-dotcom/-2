@@ -78,3 +78,7 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
 - 22:08: the libMczi window still showed. The 22:04 file listing has libMczi.so at its original 3866712 bytes and the lib dir is still from 21:19, so the v1.24 修补 never installed. Asked the user what happened. TPShell preInitial loads fucktp, then Mczi, then tprt from nativeLibraryDir.
 - In-match outfit: ANZBRCharacter::InitAvatarProxy (0x10d7380) has no DS playerinfo offline, so it falls back to DefaultRoleClotheDataTable and gets the list 10200000000, 30302000000, 30301000001, 30306000000, 30213000003, 30303000006, then runs Give Inventory. Plan: a libUE4 patch that adds the coat ID. Asked the user for the 黑色连帽风衣 ID; known coats are 30315000050 and 30315000061. Starting guns come later.
 - Gray avatar: the 'Lower Device for Original Mesh' check (0xea5b4c) is gated on quality >= 2, but the avatar stays gray even at level 5, so the cause is something else. Deprioritised.
+- v1.25 (vc 26, core 26):
+  - 功能 tab adds 查物品编号（只读）. It scans the heap through /proc/self/mem (read-only) for UTF-32 names containing 风衣 or 连帽, finds pointers to those names, and collects nearby int64 values in 1e10–1e11. ItemFind.java.
+  - 设置 tab shows the 原作者窗口 status by comparing the libMczi.so and libzlib.so sizes in nativeLibraryDir.
+  - Next: once the user sends the coat ID, patch the InitAvatarProxy default list in libUE4.

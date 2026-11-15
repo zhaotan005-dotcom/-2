@@ -179,6 +179,16 @@ public class GameOverlay {
 
     static void toast(Activity a, String msg) { Toast.makeText(a, msg, Toast.LENGTH_SHORT).show(); }
 
+    static String mcziText(Activity a) {
+        try {
+            java.io.File d = new java.io.File(a.getApplicationInfo().nativeLibraryDir);
+            long m = new java.io.File(d, "libMczi.so").length(), z = new java.io.File(d, "libzlib.so").length();
+            if (m == 0) return "游戏里没有这个库";
+            if (m == z) return "已关（装进游戏的是空壳）";
+            return "还开着（" + (m >> 10) + " KB）。要关：ZFrame → 修补游戏 → 更新内核 + 关掉原作者窗口，最后一步要点“安装/更新”";
+        } catch (Throwable e) { return "查不到：" + e; }
+    }
+
     static void fill(final Activity a, final Ui u, final LinearLayout root) {
         root.removeAllViews();
         if (tab == 0) {
@@ -204,10 +214,18 @@ public class GameOverlay {
             });
             label(a, root, "门/物资/车：" + Con.layerStatus(), 12, false, SUBT).setPadding(0, u.dp(6), 0, 0);
             label(a, root, "开局等待：" + Patches.waitStatus, 12, false, SUBT);
+            head(a, u, root, "查物品编号（只读）");
+            LinearLayout rf = row(a, root);
+            btn(a, u, rf, "查风衣", () -> { ItemFind.run("风衣", () -> a.runOnUiThread(() -> { if (tab == 1) fill(a, u, root); toast(a, "查完了，结果在下面，也写进日志了"); })); fill(a, u, root); });
+            btn(a, u, rf, "查连帽", () -> { ItemFind.run("连帽", () -> a.runOnUiThread(() -> { if (tab == 1) fill(a, u, root); toast(a, "查完了，结果在下面，也写进日志了"); })); fill(a, u, root); });
+            TextView fr = label(a, root, ItemFind.status, 12, false, SUBT);
+            fr.setTextIsSelectable(true);
         } else {
             head(a, u, root, "声音");
             LinearLayout ra = row(a, root);
             btn(a, u, ra, Con.audioAuto ? "开机先进大厅：开" : "开机先进大厅：关", () -> { Con.setAudioAuto(!Con.audioAuto); fill(a, u, root); });
+            head(a, u, root, "原作者窗口");
+            label(a, root, mcziText(a), 12, false, SUBT);
             head(a, u, root, "机型档位（实验）");
             LinearLayout rq = row(a, root);
             final boolean qup = a.getSharedPreferences("zframe", 0).getBoolean("qcc_up", false);
