@@ -74,3 +74,4 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
   - 修补游戏 is now a list: 更新内核 / 更新内核 + 关掉原作者窗口 (replaces libMczi.so in the APK with a copy of libzlib.so and backs the original up to ZFrame filesDir/libMczi.orig.so) / 恢复原作者窗口 / 去掉声音补丁.
   - User confirmed 21:53 that "他那个" (the libMczi window) should go.
 - Open requests: lobby character fix, and putting all wardrobe clothes into the 仓库 (server inventory, offline). Not done; needs RE.
+- 22:00 user: the gray lobby avatar was always there; it comes from the package, not from QCC. Simple ask: spawn 风衣 in-match, into the backpack or on the ground. Found that the exec functions GiveItem/GiveItemCount/SpawnPickupBox are stubbed to bx lr. ServerGiveItem (thunk 0xe67c20) calls vtable+0x378, implementation not checked yet. Asked the user whether to attempt a libUE4 patch that routes GiveItem to the real pickup/add-to-backpack path. Awaiting answer.
