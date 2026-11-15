@@ -424,11 +424,12 @@ public class MainActivity extends Activity {
         showProgress("检查游戏");
         bg(() -> {
             int st;
-            int mst = 0;
+            int mst = 0, gst = 0;
+            try { gst = Patcher.giveState(new File(ai.sourceDir)); } catch (Throwable ignored) {}
             try { st = Patcher.soundState(new File(ai.sourceDir)); } catch (Throwable e) { st = -1; }
             try { mst = Patcher.mcziState(new File(ai.sourceDir)); } catch (Throwable ignored) {}
             endProgress();
-            final int fs = st, fm = mst;
+            final int fs = st, fm = mst, fg = gst;
             h.post(() -> {
                 if (fs == 1) confirmSound(pkg, ai, true,
                         "会把游戏包里 libUE4.so 的一个模块名（32 字节）改掉，让引擎加载 Wwise 声音模块，同时更新游戏内置的艾挽内核。\n"
@@ -441,7 +442,7 @@ public class MainActivity extends Activity {
                             : ms == 2 ? new String[]{"更新内核", "更新内核 + 恢复原作者窗口", "去掉声音补丁"}
                             : new String[]{"更新内核", "去掉声音补丁"};
                     new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                        .setTitle("修补游戏（覆盖安装，不卸载）")
+                        .setTitle(fg == 1 ? "修补游戏（这次会加上刷物品补丁）" : fg == 2 ? "修补游戏（刷物品补丁已在）" : "修补游戏（覆盖安装，不卸载）")
                         .setItems(items, (d, w) -> {
                             String it = items[w];
                             if (it.startsWith("去掉")) runSound(pkg, ai, false, 0);
@@ -482,6 +483,7 @@ public class MainActivity extends Activity {
                 Patcher.sign(this, tmp, base);
                 tmp.delete();
                 if (Patcher.soundState(base) != (toAk ? 2 : 1)) throw new IOException("校验失败，没有安装，游戏没变");
+                try { int g = Patcher.giveState(base); plog("刷物品补丁：" + (g == 2 ? "已打" : g == 1 ? "没打（原版）" : "对不上")); } catch (Throwable ignored) {}
                 List<File> result = new ArrayList<>();
                 result.add(base);
                 if (ai.splitSourceDirs != null) for (String sd : ai.splitSourceDirs) {

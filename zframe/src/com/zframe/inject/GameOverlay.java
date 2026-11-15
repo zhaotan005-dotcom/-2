@@ -189,6 +189,46 @@ public class GameOverlay {
         } catch (Throwable e) { return "查不到：" + e; }
     }
 
+    /** v1.26：GiveItem 编号x数量（刷物品补丁里的代码会把 x 后面的数字当数量，最多 999） */
+    static void give(Activity a, String id, int n) { Con.exec("GiveItem " + id + (n > 1 ? "x" + n : "")); }
+    static void give(Activity a, String id, int n, String label) {
+        if (giveSt == 1) { toast(a, "刷物品补丁还没打：ZFrame → 修补游戏 → 更新内核"); return; }
+        give(a, id, n); toast(a, "已发：" + label + "（没出现就是这个编号不对）");
+    }
+
+    static volatile int giveSt = -1; // -1 还没查，0 查不到，1 没打，2 已打
+    static String giveText(final Activity a) {
+        if (giveSt == -1) {
+            giveSt = -2;
+            new Thread(() -> { giveSt = readGive(a); LogCap.note("刷物品补丁状态 " + giveSt); }).start();
+        }
+        return giveSt == 2 ? "已打" : giveSt == 1 ? "没打（ZFrame → 修补游戏 → 更新内核）" : giveSt == 0 ? "查不到（照样可以试）" : "检查中，切一下分页刷新";
+    }
+    static int readGive(Activity a) {
+        final long off = 0xe40cccL;
+        byte[] cur = new byte[4];
+        try {
+            java.io.File f = new java.io.File(a.getApplicationInfo().nativeLibraryDir, "libUE4.so");
+            if (f.length() > off + 4) {
+                try (java.io.RandomAccessFile r = new java.io.RandomAccessFile(f, "r")) { r.seek(off); r.readFully(cur); }
+            } else {
+                try (java.util.zip.ZipFile z = new java.util.zip.ZipFile(a.getApplicationInfo().sourceDir)) {
+                    java.util.zip.ZipEntry e = z.getEntry("lib/armeabi-v7a/libUE4.so");
+                    if (e == null) return 0;
+                    try (java.io.InputStream is = z.getInputStream(e)) {
+                        long left = off; byte[] b = new byte[1 << 16];
+                        while (left > 0) { int r = is.read(b, 0, (int) Math.min(b.length, left)); if (r < 0) return 0; left -= r; }
+                        int o = 0; while (o < 4) { int r = is.read(cur, o, 4 - o); if (r < 0) return 0; o += r; }
+                    }
+                }
+            }
+        } catch (Throwable e) { return 0; }
+        int w = (cur[0] & 0xff) | (cur[1] & 0xff) << 8 | (cur[2] & 0xff) << 16 | (cur[3] & 0xff) << 24;
+        if (w == 0xeb23573b) return 2;
+        if (w == 0xebf48b57) return 1;
+        return 0;
+    }
+
     static void fill(final Activity a, final Ui u, final LinearLayout root) {
         root.removeAllViews();
         if (tab == 0) {
@@ -214,12 +254,51 @@ public class GameOverlay {
             });
             label(a, root, "门/物资/车：" + Con.layerStatus(), 12, false, SUBT).setPadding(0, u.dp(6), 0, 0);
             label(a, root, "开局等待：" + Patches.waitStatus, 12, false, SUBT);
-            head(a, u, root, "查物品编号（只读）");
-            LinearLayout rf = row(a, root);
-            btn(a, u, rf, "查风衣", () -> { ItemFind.run("风衣", () -> a.runOnUiThread(() -> { if (tab == 1) fill(a, u, root); toast(a, "查完了，结果在下面，也写进日志了"); })); fill(a, u, root); });
-            btn(a, u, rf, "查连帽", () -> { ItemFind.run("连帽", () -> a.runOnUiThread(() -> { if (tab == 1) fill(a, u, root); toast(a, "查完了，结果在下面，也写进日志了"); })); fill(a, u, root); });
-            TextView fr = label(a, root, ItemFind.status, 12, false, SUBT);
-            fr.setTextIsSelectable(true);
+            head(a, u, root, "刷物品（要先打刷物品补丁）");
+            label(a, root, "补丁：" + giveText(a), 12, false, SUBT);
+            LinearLayout g0 = row(a, root);
+            btn(a, u, g0, "一键开局装备", () -> {
+                give(a, "20101000001", 1); give(a, "20600000001", 120); give(a, "20600000002", 120); give(a, "20600000003", 120);
+                give(a, "30304000003", 1); give(a, "30305000002", 1); give(a, "30307000006", 1); give(a, "30315000061", 1);
+                toast(a, "已发：M416、三种子弹、头盔、护甲、背包、风衣");
+            });
+            LinearLayout g1 = row(a, root);
+            btn(a, u, g1, "M416", () -> give(a, "20101000001", 1, "M416"));
+            btn(a, u, g1, "AK47", () -> give(a, "20101000002", 1, "AK47"));
+            btn(a, u, g1, "UMP9", () -> give(a, "20105000001", 1, "UMP9"));
+            LinearLayout g2 = row(a, root);
+            btn(a, u, g2, "子弹1", () -> give(a, "20600000001", 120, "子弹1 ×120"));
+            btn(a, u, g2, "子弹2", () -> give(a, "20600000002", 120, "子弹2 ×120"));
+            btn(a, u, g2, "子弹3", () -> give(a, "20600000003", 120, "子弹3 ×120"));
+            LinearLayout g3 = row(a, root);
+            btn(a, u, g3, "手雷", () -> give(a, "20401000001", 3, "手雷 ×3"));
+            btn(a, u, g3, "头盔", () -> give(a, "30304000003", 1, "头盔"));
+            btn(a, u, g3, "护甲", () -> give(a, "30305000002", 1, "护甲"));
+            btn(a, u, g3, "背包", () -> give(a, "30307000006", 1, "背包"));
+            LinearLayout g4 = row(a, root);
+            btn(a, u, g4, "风衣A 061", () -> give(a, "30315000061", 1, "风衣 30315000061"));
+            btn(a, u, g4, "风衣B 050", () -> give(a, "30315000050", 1, "风衣 30315000050"));
+            LinearLayout g5 = row(a, root);
+            final EditText gid = new EditText(a);
+            gid.setHint("物品编号"); gid.setTextColor(TXT); gid.setHintTextColor(SUBT); gid.setTextSize(13);
+            gid.setSingleLine(true); gid.setInputType(InputType.TYPE_CLASS_NUMBER);
+            gid.setBackground(box(0xFFFFFFFF, u.dp(4))); gid.setPadding(u.dp(8), u.dp(6), u.dp(8), u.dp(6));
+            LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(0, -2, 3);
+            glp.setMargins(0, u.dp(3), u.dp(6), u.dp(3));
+            g5.addView(gid, glp);
+            final EditText gn = new EditText(a);
+            gn.setHint("数量"); gn.setText("1"); gn.setTextColor(TXT); gn.setHintTextColor(SUBT); gn.setTextSize(13);
+            gn.setSingleLine(true); gn.setInputType(InputType.TYPE_CLASS_NUMBER);
+            gn.setBackground(box(0xFFFFFFFF, u.dp(4))); gn.setPadding(u.dp(8), u.dp(6), u.dp(8), u.dp(6));
+            LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(0, -2, 1);
+            nlp.setMargins(0, u.dp(3), u.dp(6), u.dp(3));
+            g5.addView(gn, nlp);
+            btn(a, u, g5, "发", () -> {
+                String id = gid.getText().toString().trim();
+                int n = 1; try { n = Integer.parseInt(gn.getText().toString().trim()); } catch (Throwable ignored) {}
+                if (id.length() < 5) { toast(a, "填物品编号"); return; }
+                give(a, id, n, id + " ×" + n);
+            });
         } else {
             head(a, u, root, "声音");
             LinearLayout ra = row(a, root);

@@ -210,6 +210,37 @@ public class Patcher {
         }
     }
 
+
+    // v1.26 刷物品补丁：游戏自带的 GiveItem 命令原本是空函数（bx lr）。把它接到游戏给机器人发装备用的那段真代码上
+    // （0xccecbc 查能放几个 + 0xcd3bdc 真正放进身上/背包），代码放在没用的 GM 面板“给手雷”函数体里。
+    // 用法：控制台 GiveItem <编号>[x数量]。和声音补丁一起打、一起还原。
+    public static final long[] GI_OFF = {0xe40cccL, 0x173c91cL, 0x17169c0L};
+    static final String[] GI_O = {
+        "578bf4eb",
+        "2768ffea",
+        "f04f2de91cb08de20cd04de2c40190e5000050e3c000000a700090e5000050e31840901500005413bb00000a9e71ddeb0c1094e55c2090e55c3091e5030052e1b50000ca581091e5580080e2021191e7000051e1b000001a9f2cebeb0c1094e55c2090e55c3091e5030052e1aa0000ca581091e5580080e2021191e7000051e1a500001ab44294e5000054e3a200000a74beeaeb0c1094e55c2090e55c3091e5030052e19c0000ca581091e5580080e2021191e7000051e19700001a0060a0e30c00a0e30d80a0e100608de508608de50010a0e304008de50800a0e1b777d1eb00009de532a0a0e33070a0e33490a0e33150a0e30810a0e100a080e5047080e5089080e50c7080e5105080e5147080e5187080e51c7080e5207080e5247080e5285080e52c6080e50400a0e1cf33d1eb00009de5000050e30000000ab7cc09eb0c00a0e30d80a0e100608de50010a0e308608de504008de50800a0e19777d1eb00009de50810a0e100a080e5800280e90c7080e5105080e5147080e5187080e51c7080e5207080e5247080e5285080e52c6080e5"};
+    static final String[] GI_N = {
+        "3b5723eb",
+        "0000a0e1",
+        "f04f2de944d04de20040a0e1005091e5046091e5000055e35b00000a0070a0e30080a0e30090a0e3060059e1560000aa090195e7300040e2090050e301908982f8ffff8a060059e10a0000aa090195e7300040e2090050e30600008a0a10a0e3972183e0983123e0007092e00080a3e2019089e2f2ffffea00a0a0e3060059e10e0000aa090195e7300040e2090050e301908982f8ffff8a060059e1070000aa090195e7300040e2090050e30300008a0aa18ae08aa080e0019089e2f5ffffea00005ae301a0a003e70300e300005ae100a0a0c1080097e12b00000a0700a0e10810a0e1102702e30030a0e3ad59c6eb0070a0e10280a0e138b894e500005be32100000a0000a0e300008de50c008de50000e0e304008de508008de50b00a0e10710a0e10820a0e10a30a0e172e0d6eb010050e30a00a0b10060a0e10000a0e340008de508008de50c008de500608de50010e0e304108de510608de540108de214108de518008de51c008de520008de524008de528008de50400a0e10710a0e10820a0e10030a0e323f4d6eb44d08de2f08fbde8"};
+    static byte[] hex(String h) { byte[] b = new byte[h.length() / 2]; for (int i = 0; i < b.length; i++) b[i] = (byte) Integer.parseInt(h.substring(2 * i, 2 * i + 2), 16); return b; }
+
+    /** 1=原版 2=已打刷物品补丁 0=对不上 */
+    public static int giveState(File apk) throws IOException {
+        try (ZipFile zf = new ZipFile(apk)) {
+            ZipEntry e = zf.getEntry(UE4_LIB);
+            if (e == null) return 0;
+            boolean allO = true, allN = true;
+            for (int k = 0; k < GI_OFF.length; k++) {
+                byte[] o = hex(GI_O[k]), n = hex(GI_N[k]), cur = new byte[o.length];
+                try (InputStream is = zf.getInputStream(e)) { skipFully(is, GI_OFF[k]); readFully(is, cur); }
+                if (!Arrays.equals(cur, o)) allO = false;
+                if (!Arrays.equals(cur, n)) allN = false;
+            }
+            return allN ? 2 : allO ? 1 : 0;
+        }
+    }
+
     static void skipFully(InputStream is, long n) throws IOException {
         byte[] b = new byte[1 << 16];
         while (n > 0) { int r = is.read(b, 0, (int) Math.min(b.length, n)); if (r < 0) throw new EOFException(); n -= r; }
@@ -220,16 +251,18 @@ public class Patcher {
         while (o < b.length) { int r = is.read(b, o, b.length - o); if (r < 0) throw new EOFException(); o += r; }
     }
 
-    /** 把 libUE4.so 从 InputStream 复制到 out，同时把 SND_OFF 处的字节换成 repl */
-    static void copyPatched(InputStream is, OutputStream out, byte[] repl, CRC32 crc) throws IOException {
+    /** 把 libUE4.so 从 InputStream 复制到 out，同时把 offs[k] 处的字节换成 reps[k] */
+    static void copyPatched(InputStream is, OutputStream out, long[] offs, byte[][] reps, CRC32 crc) throws IOException {
         byte[] b = new byte[1 << 16];
         long pos = 0; int r;
-        long ps = SND_OFF, pe = SND_OFF + repl.length;
         while ((r = is.read(b)) > 0) {
             long s = pos, e = pos + r;
-            if (e > ps && s < pe) {
-                long from = Math.max(s, ps), to = Math.min(e, pe);
-                System.arraycopy(repl, (int) (from - ps), b, (int) (from - s), (int) (to - from));
+            for (int k = 0; k < offs.length; k++) {
+                long ps = offs[k], pe = offs[k] + reps[k].length;
+                if (e > ps && s < pe) {
+                    long from = Math.max(s, ps), to = Math.min(e, pe);
+                    System.arraycopy(reps[k], (int) (from - ps), b, (int) (from - s), (int) (to - from));
+                }
             }
             if (crc != null) crc.update(b, 0, r);
             if (out != null) out.write(b, 0, r);
@@ -269,6 +302,18 @@ public class Patcher {
     /** mczi：0=不动，1=关掉原作者窗口（备份原库到 backup 再换成空壳），2=恢复（从 backup 放回） */
     public static void patchSound(File in, File outUnsigned, boolean toAk, byte[] newDex, int mczi, File backup, Log log) throws IOException {
         byte[] want = toAk ? SND_NEW : SND_ORIG;
+        long[] offs; byte[][] reps;
+        int gs = 0;
+        try { gs = giveState(in); } catch (Throwable ignored) {}
+        if (gs == 0) {
+            log.log("刷物品补丁：这个 libUE4 对不上，跳过");
+            offs = new long[]{SND_OFF}; reps = new byte[][]{want};
+        } else {
+            offs = new long[GI_OFF.length + 1]; reps = new byte[GI_OFF.length + 1][];
+            offs[0] = SND_OFF; reps[0] = want;
+            for (int k = 0; k < GI_OFF.length; k++) { offs[k + 1] = GI_OFF[k]; reps[k + 1] = hex(toAk ? GI_N[k] : GI_O[k]); }
+            log.log(toAk ? "加刷物品补丁（GiveItem 接到发装备代码）" : "还原刷物品补丁");
+        }
         byte[] buf = new byte[1 << 16];
         try (ZipFile zf = new ZipFile(in);
              ZipOutputStream zo = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outUnsigned), 1 << 16))) {
@@ -323,14 +368,14 @@ public class Patcher {
                     ne.setCompressedSize(e.getSize());
                     if (lib) {
                         CRC32 c = new CRC32();
-                        try (InputStream is = zf.getInputStream(e)) { copyPatched(is, null, want, c); }
+                        try (InputStream is = zf.getInputStream(e)) { copyPatched(is, null, offs, reps, c); }
                         ne.setCrc(c.getValue());
                     } else ne.setCrc(e.getCrc());
                 }
                 if (lib) log.log("改 libUE4.so（" + (e.getSize() >> 20) + " MB）…");
                 zo.putNextEntry(ne);
                 try (InputStream is = zf.getInputStream(e)) {
-                    if (lib) copyPatched(is, zo, want, null);
+                    if (lib) copyPatched(is, zo, offs, reps, null);
                     else { int r; while ((r = is.read(buf)) > 0) zo.write(buf, 0, r); }
                 }
                 zo.closeEntry();

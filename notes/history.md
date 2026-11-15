@@ -95,3 +95,19 @@ See project skill v27 text (archived below in summary). Key RE facts live in /wo
     - Inside it, Type = id/10000 (0xce0248) and TSID = id%10000 (0xce0260).
     - Then 0xc12370(ctrl, pawn, &{Type,TSID}, count) does: backpack = [pawn+0x838] (0xcc8274); n = 0xccecbc(bp, Type, TSID, count, 0, -1, -1, 0); then 0xcd3bdc(pawn, Type, TSID, 0, [sp]=n, -1, uidlo, uidhi, n, &zero, 0…). uid comes from 0xc1194c(ctrl) = [[ctrl+0x420]+0x3b0] (0 if null).
   - Plan: a cave that parses "GiveItem <id> [count]" and calls ccecbc + cd3bdc with uid 0. Open problem: the ID format for guns/ammo (split /10000) is still unconfirmed.
+- 22:35 v1.26 (vc 27, core 27):
+  - Removed ItemFind.
+  - 修补游戏 now also applies the 刷物品补丁 (applied together with the sound patch, restored together), 3 patches:
+    - bl at 0xe40ccc changed from 0xb63a30 to 0x17169c0.
+    - 0x173c91c (grenade thunk tail-b) becomes bx lr.
+    - 0x17169c0 holds the cave (404 bytes, source game/re/cave_giveitem.s, assembler game/re/asm.py).
+  - Cave logic: it parses the FString (UTF-32) as "<id>[x<count>]" with count capped at 999, then splits Type=id/10000 and TSID=id%10000 via __aeabi_ldivmod 0x8ad168. bp=[char+0x838]. It calls ccecbc(bp,T,S,cnt,0,-1,-1,0) and uses n (or cnt if n<1), then cd3bdc(char,T,S,0,n,-1,uid0,0,n,&zero,0...).
+  - IDs decoded from the GM panel:
+    - Guns: M416 20101000001, AK47 20101000002, UMP9 20105000001.
+    - 手雷 20401000001.
+    - Ammo 20600000001/2/3 (given after each gun by 0x171e920).
+    - GM list (guesses): 30304000003 头盔?, 30305000002 甲?, 30307000006 背包?
+    - Other IDs in the 0x8b4368 table: 201xx guns, 205xx, 401xx.
+  - InitAvatarProxy also gives avatar items via cd3bdc directly (0x10d8c14), so the coat should work through the same path.
+  - 功能 tab: 一键开局装备, gun/ammo/gear/coat buttons, and custom ID + count. Patch status is read from libUE4 at 0xe40ccc.
+  - Build: zframe/rel.py (swap dex and bump manifest from the previous APK).
