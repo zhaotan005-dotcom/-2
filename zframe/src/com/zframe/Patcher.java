@@ -273,6 +273,13 @@ public class Patcher {
                         continue;
                     }
                 }
+                if (n.equals("assets/QCC_APM_PUBGM")) {
+                    byte[] d = readAll(zf.getInputStream(e));
+                    String js = com.zframe.inject.Qcc.addModel(new String(d, "UTF-8"), android.os.Build.MODEL);
+                    if (js != null) { d = js.getBytes("UTF-8"); log.log("画质机型表加入 " + android.os.Build.MODEL); }
+                    put(zo, n, d, e.getMethod() == ZipEntry.STORED ? ZipEntry.STORED : ZipEntry.DEFLATED);
+                    continue;
+                }
                 ZipEntry ne = new ZipEntry(n);
                 boolean lib = n.equals(UE4_LIB);
                 if (e.getMethod() == ZipEntry.STORED) {

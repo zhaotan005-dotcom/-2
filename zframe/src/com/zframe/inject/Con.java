@@ -144,6 +144,8 @@ public class Con {
     }
 
     static void applyFps() {
+        // v1.23：帧率交给游戏自己的设置（机型已解锁到最高档），这里不再改
+        if (true) return;
         final int f = fps; if (f <= 0) return;
         exec("t.MaxFPS " + f);
         final Activity a = act;
@@ -208,6 +210,11 @@ public class Con {
 
     /** 返回给用户看的提示 */
     public static String goMap(String m) {
+        if (audioAuto && !feAudioSeen && startupLobby && brMap == null) {
+            // 开机进大厅还没完成：等大厅声音好了再自动进这张图，不重复开大厅
+            pendingMap = m; bounce = 1; brLoadedAt = 0;
+            return "大厅还在加载声音，好了自动进图";
+        }
         if (audioAuto && !feAudioSeen) {
             pendingMap = m; bounce = 1; brLoadedAt = 0;
             audioFix = "先进大厅加载声音，然后自动进图…";
@@ -235,7 +242,15 @@ public class Con {
         return true;
     }
 
+    // v1.23：开机在 StartupMap 上就直接进大厅（只一次），声音在大厅里初始化好，之后从艾挽选图直接进，不再来回跳
+    static volatile boolean startupLobby;
     static void tickAudio(long now) {
+        if (!startupLobby && audioAuto && !feAudioSeen && bounce == 0 && brMap == null && engineSeenAt > 0 && now - engineSeenAt > 3000 && act != null) {
+            startupLobby = true;
+            audioFix = "开机先进大厅加载声音";
+            LogCap.note("声音: 开机直接进大厅 " + LOBBY);
+            exec("open " + LOBBY);
+        }
         if (bounce == 0 && brLoadedAt > 0 && !feAudioSeen && now - brLoadedAt > 2500) {
             if (!audioAuto && !manualBounce) { brLoadedAt = 0; audioFix = "自动修复已关闭（大厅音频未初始化）"; return; }
             manualBounce = false;
