@@ -53,7 +53,11 @@ public class Patcher {
         try (ZipFile zf = new ZipFile(in)) {
             ZipEntry me = zf.getEntry("AndroidManifest.xml");
             if (me == null) throw new IOException("APK 里没有 AndroidManifest.xml（可能是分包，不是 base）");
-            Axml x = Axml.parse(readAll(zf.getInputStream(me)));
+            byte[] mraw = readAll(zf.getInputStream(me));
+            if (inject && (new String(mraw, "UTF-16LE").contains("com.zframe.inject.ZInit")
+                    || new String(mraw, "ISO-8859-1").contains("com.zframe.inject.ZInit")))
+                throw new IOException("这个游戏已经注入过 ZFrame 了，不用再注入。直接在游戏卡片上点「声音补丁」。");
+            Axml x = Axml.parse(mraw);
             int mi = x.findStart("manifest");
             pkg = x.attr(mi, "package");
             log.log("包名：" + pkg);

@@ -239,7 +239,7 @@ public class MainActivity extends Activity {
             LinearLayout br = u.row();
             g.addView(br);
             u.primary(br, "启动", v -> launchGame(pkg, true));
-            if (installed && pt.contains(pkg) && !isTool) u.ghost(br, "声音补丁", v -> soundPatch(pkg));
+            if (installed && !isTool) u.ghost(br, "声音补丁", v -> soundPatch(pkg));
             if (root) u.ghost(br, "Root改", v -> { target = pkg; sp.edit().putString("target", pkg).apply(); launchGame(pkg, true); show(3); });
             u.danger(br, "移除", v -> { Set<String> s = games(); s.remove(pkg); saveGames(s); show(1); });
         }
@@ -270,6 +270,13 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert).setTitle("选择要注入的游戏")
                 .setItems(labels, (d, w) -> {
                     ApplicationInfo ai = apps.get(w);
+                    if (Patcher.signedByUs(this, ai.packageName)) {
+                        Set<String> g = games(); g.add(ai.packageName); saveGames(g);
+                        Set<String> p = patched(); p.add(ai.packageName); sp.edit().putStringSet("patched", p).apply();
+                        toast("这个游戏已经注入过了，已加回列表");
+                        show(1);
+                        return;
+                    }
                     List<File> in = new ArrayList<>();
                     in.add(new File(ai.sourceDir));
                     if (ai.splitSourceDirs != null) for (String s : ai.splitSourceDirs) in.add(new File(s));
@@ -482,7 +489,7 @@ public class MainActivity extends Activity {
     }
 
     void install(List<File> apks, String pkg) {
-        if (isInstalled(pkg) && !patched().contains(pkg)) {
+        if (!soundInstall && isInstalled(pkg) && !patched().contains(pkg) && !Patcher.signedByUs(this, pkg)) {
             new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
                     .setTitle("需要先卸载原版")
                     .setMessage("重新打包后的签名和原版不同，系统要求先卸载原版。\n原版本地存档会被清空（云存档不受影响）。\n卸载后回到 ZFrame，在游戏页点“继续安装”。")
