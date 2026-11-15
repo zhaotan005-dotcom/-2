@@ -32,7 +32,12 @@ public class Patches {
             if (base == 0) { LogCap.note("补丁: 3 分钟内没等到 libUE4.so"); return; }
             LogCap.note("补丁: libUE4 基址 0x" + Long.toHexString(base) + " 用时" + (System.currentTimeMillis() - t0) + "ms");
             ueBase = base;
-            if (!MEM) { LogCap.note("安全模式: 不读写游戏内存（v1.17）"); audioStatus = "安全模式未检测"; return; }
+            if (!MEM) {
+                LogCap.note("安全模式: 不写游戏内存（v1.19 只读一次 Wwise 标志）");
+                // v1.17 已证明闪退不是内存读写导致；这里只读 1 个字节，不写
+                audioProbe(base);
+                return;
+            }
             audioProbe(base);
             for (int round = 0; round < 5 && PUBGM_PATCHES.length > 0; round++) {
                 for (P p : PUBGM_PATCHES) apply(base, p, round == 0);
@@ -100,7 +105,7 @@ public class Patches {
             try (RandomAccessFile m = new RandomAccessFile("/proc/self/mem", "r")) {
                 m.seek(base + AK_FLAG); int f = m.read();
                 m.seek(base + AK_VERB); int v = m.read();
-                audioStatus = f == 1 ? "音效引擎已启动" : "音效引擎没启动(" + f + ")";
+                audioStatus = f == 1 ? "Wwise 音效引擎已启动" : "Wwise 音效引擎没启动(" + f + ")";
                 LogCap.note("声音: Wwise 标志=" + f + " 日志级别=" + v);
             } catch (Throwable e) { LogCap.note("声音: 探测出错 " + e); audioStatus = "探测出错"; }
         }}, "zframe-audio");

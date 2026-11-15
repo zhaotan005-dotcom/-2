@@ -2,11 +2,11 @@
 set -e
 cd "$(dirname "$0")"
 E=/workspace/work/rkenv
-export JAVA_HOME=$E/jdk-21.0.12.1+1; export PATH=$JAVA_HOME/bin:$PATH
-AAPT2=$E/aapt2tools/build-tools/aapt2
+export JAVA_HOME=$E/jdk-21.0.13+9; export PATH=$JAVA_HOME/bin:$PATH
+AAPT2=/workspace/work/tools/android-16/aapt2
 BT=/workspace/work/tools/android-16
 AJ=/workspace/work/tools/android-36/android.jar
-APKSIG=/workspace/work/tools/apksig.jar
+APKSIG=/workspace/work/tools/android-16/lib/apksigner.jar
 VER=$(grep -o 'versionName="[^"]*"' AndroidManifest.xml | cut -d'"' -f2)
 rm -rf build && mkdir -p build/classes build/dex build/inject build/res
 javac --release 8 -encoding UTF-8 -nowarn -classpath $AJ:$APKSIG -d build/classes $(find src -name '*.java') 2>&1 | grep -v -E "^Note|warning: \[options\]|^[0-9]+ warnings?" || true

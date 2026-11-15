@@ -43,14 +43,14 @@ public class ZInit extends ContentProvider {
         return true;
     }
 
-    public static final int CORE_VER = 19;
+    public static final int CORE_VER = 20;
 
     public static void boot(Context ctx) {
         try {
             Application app = (Application) ctx.getApplicationContext();
             String proc = android.os.Build.VERSION.SDK_INT >= 28 ? Application.getProcessName() : ctx.getPackageName();
             boolean main = ctx.getPackageName().equals(proc);
-            if (main) { LogCap.start(ctx); Con.startWatcher(app);
+            if (main) { LogCap.start(ctx); AkDiag.prepare(ctx); Con.startWatcher(app);
                 Patches.start(ctx); }
             loadPlugins(ctx);
             if (main) app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {

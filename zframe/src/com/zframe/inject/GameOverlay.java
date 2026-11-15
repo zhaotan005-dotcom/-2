@@ -103,7 +103,12 @@ public class GameOverlay {
         u.text(root, "修复", 15, Ui.TEXT, true).setPadding(0, u.dp(10), 0, u.dp(4));
         u.sub(root, Patches.Status.text());
         u.sub(root, "开局等待：" + Patches.waitStatus);
-        u.sub(root, "声音：" + Patches.audioStatus);
+        u.sub(root, "声音引擎：" + Patches.audioStatus);
+        u.sub(root, "声音修复：" + Con.audioFix);
+        u.sub(root, "声音诊断日志：" + AkDiag.status);
+        LinearLayout ra = u.row(); root.addView(ra);
+        btn(u, ra, "经大厅重进本局(修声音)", () -> Toast.makeText(a, Con.audioBounceNow() ? "马上进大厅初始化声音，然后自动回到地图" : Con.audioFix, Toast.LENGTH_LONG).show());
+        btn(u, ra, Con.audioAuto ? "自动修声音：开" : "自动修声音：关", () -> { Con.setAudioAuto(!Con.audioAuto); Toast.makeText(a, Con.audioAuto ? "已开启：每次启动第一次进图会先经过大厅" : "已关闭自动修声音", Toast.LENGTH_SHORT).show(); d.dismiss(); });
         final TextView ls = u.sub(root, "门/物资/车刷新层：" + Con.layerStatus());
         u.ghost(root, "重新加载门/物资/车刷新层", v -> { Con.loadServerLevels("手动"); ls.setText("门/物资/车刷新层：" + Con.layerStatus()); });
 

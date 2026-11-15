@@ -117,11 +117,11 @@ public class Con {
         "set NZSceneDoorManager StandaloneUnloadAllDoor 0",
         "set NZGameMode bEnableAIDefaultWeap 1",
         "set NZGameMode bEnableGiveBotEquip 1",
-        "set NZBattleRoyaleGame MaxBotLimit 30",
+        "set NZBattleRoyaleGameMode MaxBotLimit 30",
         "getall NZBRGameState WaitingPlayersCountDownTime",
         "getall NZBRGameState StartMatchCountDownTime",
         "getall NZSceneDoorManager StandaloneUnloadAllDoor",
-        "getall NZBattleRoyaleGame MaxBotLimit",
+        "getall NZBattleRoyaleGameMode MaxBotLimit",
     };
     static volatile long engineSeenAt, tweakAt, browseAt;
     static volatile int tweakDone; static volatile long waitAt, brAt;
@@ -176,14 +176,80 @@ public class Con {
         if (browseAt > tweakAt && now - browseAt > 1500) runTweaks("进图时");
         if (fpsAt > 0 && now - fpsAt > 800) { fpsAt = 0; applyFps(); }
         if (brAt > 0 && now - brAt > 3000) { brAt = 0; Patches.shortenWait("本局"); }
+        tickAudio(now);
     }
+
+    // ===== v1.19 声音修复：经大厅初始化 Wwise 音频管理器 =====
+    // 日志显示：单机版开机直接从 StartupMap 跳进海岛，绕过了大厅；
+    // UNZFrontEndAudioManager / UNZPlatformAudioHelper（加载 UI/BGM 音频库、管理 Wwise 挂起/唤醒）只在大厅地图里初始化。
+    // 做法：第一次进海岛后，如果本次启动还没见过大厅音频初始化，就先 open 大厅，等音频初始化完成后再 open 回同一张地图。
+    static final String LOBBY = "/Game/Maps/Erangle_RoleHall/NEW/FrontEndMap_NEW";
+    public static volatile boolean audioAuto = true;
+    static volatile boolean feAudioSeen; static volatile int bounce; // 0 未做 1 已去大厅 2 已回地图
+    static volatile long brLoadedAt, feSeenAt; static volatile String brMap;
+    public static volatile String audioFix = "等待进图";
+
+    static void loadAudioPref() {
+        Activity a = act; if (a == null) return;
+        audioAuto = a.getSharedPreferences("zframe", 0).getBoolean("audio_auto", true);
+    }
+
+    public static void setAudioAuto(boolean on) {
+        audioAuto = on;
+        Activity a = act;
+        if (a != null) a.getSharedPreferences("zframe", 0).edit().putBoolean("audio_auto", on).apply();
+    }
+
+    /** 手动：现在就经大厅重进当前地图 */
+    public static boolean audioBounceNow() {
+        if (brMap == null) { audioFix = "还没进过地图，先进一局再点"; return false; }
+        manualBounce = true; bounce = 0; feAudioSeen = false; feSeenAt = 0; brLoadedAt = System.currentTimeMillis() - 5000;
+        return true;
+    }
+
+    static void tickAudio(long now) {
+        if (bounce == 0 && brLoadedAt > 0 && !feAudioSeen && now - brLoadedAt > 2500) {
+            if (!audioAuto && !manualBounce) { brLoadedAt = 0; audioFix = "自动修复已关闭（大厅音频未初始化）"; return; }
+            manualBounce = false;
+            bounce = 1; brLoadedAt = 0;
+            audioFix = "正在进大厅初始化声音…";
+            LogCap.note("声音修复: 本次启动没见过大厅音频初始化，先进大厅 " + LOBBY);
+            exec("open " + LOBBY);
+        }
+        if (bounce == 1 && feAudioSeen && feSeenAt > 0 && now - feSeenAt > 4000) {
+            bounce = 2;
+            String m = brMap != null ? brMap : "/Game/Maps/SavageMobile_4x4_Runtime/BR-Savage_Mobile_Main";
+            audioFix = "大厅音频已初始化，正在回到地图";
+            LogCap.note("声音修复: 大厅音频已初始化，回到 " + m);
+            exec("open " + m);
+        }
+    }
+    static volatile boolean manualBounce;
 
     static volatile String circle = null; // "x y"
 
     static final long bootAt = System.currentTimeMillis();
 
     static void line(String l) {
-        if (engineSeenAt == 0 && l.contains("LogLoad: Took")) { engineSeenAt = System.currentTimeMillis(); LogCap.note("引擎就绪，10秒后发送设置"); }
+        if (engineSeenAt == 0 && l.contains("LogLoad: Took")) { engineSeenAt = System.currentTimeMillis(); LogCap.note("引擎就绪，10秒后发送设置"); AkDiag.engineUp(act); loadAudioPref(); }
+        if (l.contains("UNZFrontEndAudioManager: init") || l.contains("UNZPlatformAudioHelper::OnInitialize")) {
+            if (!feAudioSeen) { feAudioSeen = true; feSeenAt = System.currentTimeMillis(); LogCap.note("声音修复: 看到大厅音频初始化"); }
+            if (bounce != 1) audioFix = "大厅音频已初始化";
+        }
+        int tk = l.indexOf("LogLoad: Took");
+        if (tk >= 0) {
+            int lm = l.indexOf("LoadMap(", tk);
+            if (lm >= 0) {
+                String m = l.substring(lm + 8); int e = m.indexOf(')'); if (e > 0) m = m.substring(0, e);
+                int q = m.indexOf('?'); if (q > 0) m = m.substring(0, q);
+                if (m.startsWith("/Game/Maps/") && !m.contains("RoleHall") && !m.contains("FrontEnd")) {
+                    brMap = m;
+                    if (bounce == 2) audioFix = feAudioSeen ? "已经过大厅初始化，本局应有声音" : "已回到地图";
+                    else if (!feAudioSeen && bounce == 0) brLoadedAt = System.currentTimeMillis();
+                }
+            }
+        }
+        if (l.contains("AkAudio") || l.contains("Audiokinetic") || l.contains("Wwise(R)")) LogCap.note("声音日志: " + l.trim());
         int c = l.indexOf("BlueCircle: ");
         if (c >= 0) { try {
             String[] a = l.substring(c + 12).split(",");
